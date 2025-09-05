@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Case Data Map Visualization</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
+          crossorigin="anonymous"/>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 12px;
+        }
+        
+        .header {
+            text-align: center;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 8px;
+            font-size: 1.5rem;
+        }
+        
+        .description {
+            color: #7f8c8d;
+            max-width: 800px;
+            margin: 0 auto;
+            line-height: 1.4;
+            font-size: 0.9rem;
+        }
+        
+        .container {
+            display: flex;
+            flex: 1;
+            gap: 15px;
+            min-height: 0;
+        }
+        
+        #map {
+            flex: 3;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            z-index: 1;
+        }
+        
+        .sidebar {
+            flex: 1;
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            max-width: 320px;
+            overflow-y: auto;
+        }
+        
+        .stats {
+            margin-bottom: 20px;
+        }
+        
+        .stats h2 {
+            color: #2c3e50;
+            font-size: 1.1rem;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #ecf0f1;
+        }
+        
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding: 6px 0;
+            border-bottom: 1px solid #ecf0f1;
+            font-size: 0.85rem;
+        }
+        
+        .stat-value {
+            font-weight: 600;
+            color: #3498db;
+            font-size: 0.85rem;
+        }
+        
+        .controls {
+            margin-bottom: 20px;
+        }
+        
+        .controls h2 {
+            color: #2c3e50;
+            font-size: 1.1rem;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #ecf0f1;
+        }
+        
+        .search-container {
+            margin-bottom: 12px;
+        }
+        
+        .search-container input {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            margin-bottom: 8px;
+        }
+        
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            width: 100%;
+            margin-bottom: 8px;
+            transition: background 0.3s;
+            font-size: 0.85rem;
+        }
+        
+        button:hover {
+            background: #2980b9;
+        }
+        
+        .case-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+        
+        .case-list h2 {
+            color: #2c3e50;
+            font-size: 1.1rem;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #ecf0f1;
+        }
+        
+        .case-item {
+            padding: 8px;
+            margin-bottom: 8px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border-left: 3px solid #3498db;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-size: 0.8rem;
+        }
+        
+        .case-item:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            background: #e8f4fc;
+        }
+        
+        .case-number {
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 0.8rem;
+            margin-bottom: 4px;
+        }
+        
+        .case-subject {
+            color: #7f8c8d;
+            margin: 3px 0;
+            font-size: 0.75rem;
+            line-height: 1.3;
+        }
+        
+        .case-coords {
+            color: #95a5a6;
+            font-size: 0.7rem;
+        }
+        
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            font-size: 0.9rem;
+            color: #7f8c8d;
+        }
+        
+        .spinner {
+            border: 3px solid rgba(0, 0, 0, 0.1);
+            border-left: 3px solid #3498db;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+        
+        .no-results {
+            text-align: center;
+            padding: 15px;
+            color: #7f8c8d;
+            font-style: italic;
+            font-size: 0.85rem;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 15px;
+            color: #7f8c8d;
+            font-size: 0.8rem;
+        }
+        
+        .auto-refresh-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 8px;
+            font-size: 0.75rem;
+            color: #7f8c8d;
+        }
+        
+        .refresh-icon {
+            margin-right: 5px;
+            font-size: 0.8rem;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                max-width: none;
+                order: 2;
+            }
+            
+            #map {
+                order: 1;
+                height: 300px;
+            }
+            
+            h1 {
+                font-size: 1.3rem;
+            }
+            
+            .description {
+                font-size: 0.8rem;
+            }
+        }
+        
+        /* Auth Modal Styles */
+        .auth-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .auth-modal-content {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+        }
+        
+        .auth-modal h2 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+        }
+        
+        .auth-modal p {
+            color: #7f8c8d;
+            margin-bottom: 15px;
+            line-height: 1.4;
+            font-size: 0.9rem;
+        }
+        
+        .auth-modal input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            margin-bottom: 15px;
+        }
+        
+        .auth-modal button {
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+        
+        .error-message {
+            color: #e74c3c;
+            margin-top: 8px;
+            display: none;
+            font-size: 0.8rem;
+        }
+        
+        .case-table-header {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            padding: 5px 8px;
+            font-weight: bold;
+            font-size: 0.75rem;
+            color: #2c3e50;
+            border-bottom: 1px solid #ddd;
+            margin-bottom: 5px;
+        }
+        
+        .case-table-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            padding: 6px 8px;
+            font-size: 0.75rem;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+        }
+        
+        .case-table-row:hover {
+            background-color: #e8f4fc;
+        }
+    </style>
+</head>
+<body>
+    <!-- Auth Modal -->
+    <div class="auth-modal" id="auth-modal">
+        <div class="auth-modal-content">
+            <h2>Authentication Required</h2>
+            <p>Please enter your API key to access the case data map visualization.</p>
+            <input type="password" id="auth-input" placeholder="Enter your API key">
+            <button id="auth-submit">Submit</button>
+            <div class="error-message" id="auth-error">Invalid API key. Please try again.</div>
+        </div>
+    </div>
+
+    
+    <div class="container">
+        <div id="map"></div>
+        
+        <div class="sidebar">
+            <div class="stats">
+                <h2>Statistics</h2>
+                <div class="stat-item">
+                    <span>Total Cases:</span>
+                    <span class="stat-value" id="total-cases">0</span>
+                </div>
+                <div class="stat-item">
+                    <span>Visible Cases:</span>
+                    <span class="stat-value" id="visible-cases">0</span>
+                </div>
+                <div class="stat-item">
+                    <span>Last Updated:</span>
+                    <span class="stat-value" id="last-updated">-</span>
+                </div>
+            </div>
+            
+            <div class="controls">
+                <h2>Controls</h2>
+                
+                <div class="search-container">
+                    <input type="text" id="search-input" placeholder="Search by case number or subject...">
+                </div>
+                
+                <button id="refresh-btn">Refresh Data</button>
+                
+                <div class="auto-refresh-indicator">
+                    <span class="refresh-icon">↻</span>
+                    <span id="refresh-timer">Auto-refresh in 10:00</span>
+                </div>
+            </div>
+            
+            <div class="case-list">
+                <h2>Cases</h2>
+                <div class="case-table-header">
+                    <span>Case Number</span>
+                    <span>Coordinates</span>
+                </div>
+                <div id="cases-container">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <span>Waiting for authentication...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <p>For Internal Gigaclear use only</p>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" 
+            crossorigin="anonymous"></script>
+    
+    <script>
+        // Constants
+        const BASE_URL = "https://script.google.com/macros/s/AKfycbx7bwHsvI44exh1EuSNpeWa9MMvJvjByWUnbhqi8ROlGBgQK5iOTaVCu3wDGeMnU4p_/exec";
+        const AUTO_REFRESH_INTERVAL = 10 * 60 * 1000; // 10 minutes in milliseconds
+        
+        // Global variables
+        let map, markers = [], allMarkers = [];
+        let caseData = [], filteredCaseData = [];
+        let authToken = null;
+        let refreshTimer = null;
+        let timeUntilRefresh = AUTO_REFRESH_INTERVAL / 1000; // in seconds
+        
+        // Initialize the map
+        function initMap() {
+            map = L.map('map').setView([51.505, -0.09], 13);
+            
+            // Add OpenStreetMap tiles
+            L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Tiles style by <a href="https://www.hotosm.org/">Humanitarian OpenStreetMap Team</a>',
+                maxZoom: 19
+            }).addTo(map);
+            
+            // Add a scale control
+            L.control.scale({imperial: false}).addTo(map);
+            
+            // Show auth modal instead of fetching data immediately
+            showAuthModal();
+        }
+        
+        // Show authentication modal
+        function showAuthModal() {
+            const modal = document.getElementById('auth-modal');
+            const authInput = document.getElementById('auth-input');
+            const authSubmit = document.getElementById('auth-submit');
+            const authError = document.getElementById('auth-error');
+            
+            // Focus on input field
+            setTimeout(() => authInput.focus(), 100);
+            
+            // Handle submit button click
+            authSubmit.addEventListener('click', () => {
+                const token = authInput.value.trim();
+                if (token) {
+                    authToken = token;
+                    modal.style.display = 'none';
+                    fetchCaseData();
+                    startAutoRefresh();
+                } else {
+                    authError.style.display = 'block';
+                }
+            });
+            
+            // Handle Enter key press
+            authInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    authSubmit.click();
+                }
+            });
+            
+            // Show the modal
+            modal.style.display = 'flex';
+        }
+        
+        // Start auto-refresh timer
+        function startAutoRefresh() {
+            // Clear existing timer if any
+            if (refreshTimer) {
+                clearInterval(refreshTimer);
+            }
+            
+            // Reset timer countdown
+            timeUntilRefresh = AUTO_REFRESH_INTERVAL / 1000;
+            updateRefreshTimerDisplay();
+            
+            // Set up interval for auto-refresh
+            refreshTimer = setInterval(() => {
+                fetchCaseData();
+            }, AUTO_REFRESH_INTERVAL);
+            
+            // Set up countdown timer
+            setInterval(() => {
+                timeUntilRefresh -= 1;
+                if (timeUntilRefresh <= 0) {
+                    timeUntilRefresh = AUTO_REFRESH_INTERVAL / 1000;
+                }
+                updateRefreshTimerDisplay();
+            }, 1000);
+        }
+        
+        // Update the refresh timer display
+        function updateRefreshTimerDisplay() {
+            const minutes = Math.floor(timeUntilRefresh / 60);
+            const seconds = timeUntilRefresh % 60;
+            document.getElementById('refresh-timer').textContent = 
+                `Auto-refresh in ${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+        }
+        
+        // Fetch case data from the API
+        async function fetchCaseData() {
+            showLoading(true, "Loading cases...");
+            
+            if (!authToken) {
+                showAuthModal();
+                return;
+            }
+            
+            const url = `${BASE_URL}?getCases=true&token=${authToken}`;
+            
+            try {
+                const response = await fetch(url, {
+                    method: "GET",
+                    headers: {
+                        "Accept": "application/json"
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error ${response.status}`);
+                }
+                
+                const data = await response.json();
+                // The response is an object with a 'rows' property containing the array
+                processCaseData(data.rows);
+            } catch (err) {
+                console.error("Fetch error:", err);
+                showLoading(false);
+                
+                // If there's an error, show auth modal again
+                if (err.message.includes("401") || err.message.includes("403")) {
+                    showAuthModal();
+                    document.getElementById('auth-error').textContent = "Authentication failed. Please check your API key.";
+                    document.getElementById('auth-error').style.display = "block";
+                }
+            }
+        }
+        
+        // Process the case data
+        function processCaseData(rows) {
+            // Clear previous markers
+            clearMarkers();
+            
+            // Store the case data (skip header row if present)
+            if (rows.length > 0 && Array.isArray(rows[0]) && rows[0][0] === 'Case Number') {
+                // Skip the header row
+                caseData = rows.slice(1);
+            } else {
+                caseData = rows;
+            }
+            
+            // Initially, filtered data is all data
+            filteredCaseData = [...caseData];
+            
+            // Update statistics
+            updateStatistics();
+            
+            // Create markers for each case
+            createMarkers();
+            
+            // Update case list
+            updateCaseList();
+            
+            showLoading(false);
+        }
+        
+        // Create markers for all cases in filteredCaseData
+        function createMarkers() {
+            // Clear previous markers
+            clearMarkers();
+            
+            // Define your custom icon
+            const customIcon = L.icon({
+                iconUrl: 'https://gc-strapi-production.s3.eu-west-2.amazonaws.com/medium_Giganaut_with_flag_above_knee_crop_dc42a9db9e.png',
+                iconSize:     [30, 30],
+                iconAnchor:   [15, 30],
+                popupAnchor:  [0, -30]
+            });
+            
+            // Create markers for each case
+            filteredCaseData.forEach((caseItem, index) => {
+                const caseNumber = caseItem[0];
+                const subject = caseItem[1];
+                const lat = parseFloat(caseItem[2]);
+                const lng = parseFloat(caseItem[3]);
+                const id = caseItem[4];
+                
+                let properAttachments = [];
+
+                try {
+                    if (caseItem[5]) {
+                        const attachmentIds = JSON.parse(caseItem[5]);
+                        if (Array.isArray(attachmentIds)) {
+                            properAttachments = attachmentIds.map(item => item.Id);
+                        }
+                    }
+                } catch (e) {
+                    // leave properAttachments as []
+                }
+
+                // Only create marker if coordinates are valid
+                if (!isNaN(lat) && !isNaN(lng)) {
+                    // Create marker with custom icon
+                    const marker = L.marker([lat, lng], {icon: customIcon});
+                    
+                    // Bind popup with case information
+                    marker.bindPopup(`
+                        <div style="min-width: 200px">
+                            <h3>Case Details</h3>
+                            <p><strong>Case Number:</strong> <a href='https://gigaclear.my.salesforce.com/${id}' target="_blank">${caseNumber}</a></p>
+                            <p><strong>Subject:</strong> ${subject}</p>
+                            <p><strong>Latitude:</strong> ${lat}</p>
+                            <p><strong>Longitude:</strong> ${lng}</p>
+                            <p><strong>Attachments:</strong> ${properAttachments.length > 0 ? properAttachments.map(attId => `<a href='https://gigaclear.my.salesforce.com/servlet/servlet.FileDownload?file=${attId}' target="_blank">${attId}</a>`).join(', ') : 'None'}</p>
+                        </div>
+                    `);
+                    
+                    // Add to map and store reference
+                    marker.addTo(map);
+                    markers.push(marker);
+                    allMarkers.push(marker);
+                    
+                    // Add click event to highlight marker and open popup
+                    marker.on('click', function() {
+                        highlightCase(index);
+                    });
+                }
+            });
+            
+            // Adjust map view to show all markers
+            if (markers.length > 0) {
+                const group = new L.featureGroup(markers);
+                map.fitBounds(group.getBounds().pad(0.1));
+            }
+            
+            // Update visible cases count
+            document.getElementById('visible-cases').textContent = markers.length;
+        }
+        
+        // Filter cases based on search query
+        function filterCases(query) {
+            if (!query) {
+                // If query is empty, show all cases
+                filteredCaseData = [...caseData];
+            } else {
+                // Filter cases by case number or subject (case insensitive)
+                const lowerQuery = query.toLowerCase();
+                filteredCaseData = caseData.filter(caseItem => {
+                    const caseNumber = caseItem[0].toLowerCase();
+                    const subject = caseItem[1].toLowerCase();
+                    return caseNumber.includes(lowerQuery) || subject.includes(lowerQuery);
+                });
+            }
+            
+            // Update UI with filtered results
+            createMarkers();
+            updateCaseList();
+            updateStatistics();
+        }
+        
+        // Update the case list in the sidebar
+        function updateCaseList() {
+            const container = document.getElementById('cases-container');
+            container.innerHTML = '';
+            
+            if (filteredCaseData.length === 0) {
+                container.innerHTML = '<div class="no-results">No cases found</div>';
+                return;
+            }
+            
+            filteredCaseData.forEach((caseItem, index) => {
+                const caseNumber = caseItem[0];
+                const subject = caseItem[1];
+                const lat = caseItem[2];
+                const lng = caseItem[3];
+                const id = caseItem[4];
+                
+                const caseElement = document.createElement('div');
+                caseElement.className = 'case-table-row';
+                caseElement.innerHTML = `
+                    <div class="case-number"><a href='https://gigaclear.my.salesforce.com/${id}' target="_blank">${caseNumber}</a></div>
+                    <div class="case-coords">${lat}, ${lng}</div>
+                `;
+                
+                // Add subject as a tooltip
+                caseElement.title = subject;
+                
+                caseElement.addEventListener('click', () => {
+                    // Find and trigger the corresponding marker
+                    if (index < markers.length) {
+                        map.setView(markers[index].getLatLng(), 15);
+                        markers[index].openPopup();
+                        highlightCase(index);
+                    }
+                });
+                
+                container.appendChild(caseElement);
+            });
+        }
+        
+        // Update statistics
+        function updateStatistics() {
+            document.getElementById('total-cases').textContent = caseData.length;
+            document.getElementById('visible-cases').textContent = filteredCaseData.length;
+            document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
+        }
+        
+        // Highlight a case in the list
+        function highlightCase(index) {
+            const caseItems = document.querySelectorAll('.case-table-row');
+            caseItems.forEach(item => {
+                item.style.background = '#f8f9fa';
+            });
+            
+            if (caseItems[index]) {
+                caseItems[index].style.background = '#e8f4fc';
+                caseItems[index].scrollIntoView({behavior: 'smooth', block: 'nearest'});
+            }
+        }
+        
+        // Clear all markers from the map
+        function clearMarkers() {
+            markers.forEach(marker => map.removeLayer(marker));
+            markers = [];
+        }
+        
+        // Show or hide loading state
+        function showLoading(show, message = "Loading cases...") {
+            const casesContainer = document.getElementById('cases-container');
+            if (show) {
+                casesContainer.innerHTML = `
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <span>${message}</span>
+                    </div>
+                `;
+            }
+        }
+        
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            initMap();
+            
+            // Add event listeners
+            document.getElementById('refresh-btn').addEventListener('click', function() {
+                fetchCaseData();
+                // Reset the auto-refresh timer
+                timeUntilRefresh = AUTO_REFRESH_INTERVAL / 1000;
+                updateRefreshTimerDisplay();
+            });
+            
+            // Add search functionality
+            const searchInput = document.getElementById('search-input');
+            searchInput.addEventListener('input', function() {
+                filterCases(this.value);
+            });
+            
+            // Allow Enter key to search
+            searchInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    filterCases(this.value);
+                }
+            });
+        });
+    </script>
+</body>
+</html>
