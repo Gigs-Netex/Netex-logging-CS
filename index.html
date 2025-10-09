@@ -595,7 +595,7 @@
         function createMarkers() {
             // Clear previous markers
             clearMarkers();
-            
+
             // Define your custom icon
             const customIcon = L.icon({
                 iconUrl: 'https://gc-strapi-production.s3.eu-west-2.amazonaws.com/medium_Giganaut_with_flag_above_knee_crop_dc42a9db9e.png',
@@ -603,17 +603,23 @@
                 iconAnchor:   [15, 30],
                 popupAnchor:  [0, -30]
             });
-            
-            // Create markers for each case
+
+            // Define blue exclamation icon for special cases
+            const blueExclamationIcon = L.icon({
+                iconUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6c/Blue_exclamation_mark_icon.svg/48px-Blue_exclamation_mark_icon.svg.png',
+                iconSize: [30, 30],
+                iconAnchor: [15, 30],
+                popupAnchor: [0, -30]
+            });
+
             filteredCaseData.forEach((caseItem, index) => {
                 const caseNumber = caseItem[0];
                 const subject = caseItem[1];
                 const lat = parseFloat(caseItem[2]);
                 const lng = parseFloat(caseItem[3]);
                 const id = caseItem[4];
-                
-                let properAttachments = [];
 
+                let properAttachments = [];
                 try {
                     if (caseItem[5]) {
                         const attachmentIds = JSON.parse(caseItem[5]);
@@ -625,12 +631,23 @@
                     // leave properAttachments as []
                 }
 
+                // Check for 'Builder with more than 2 or more property: yes' in comments (assume index 6)
+                const comments = caseItem[6] || "";
+                let isBuilderWithMoreThan2 = false;
+                if (comments.includes("Builder with more than 2 or more property:")) {
+                    const match = comments.match(/Builder with more than 2 or more property:\s*(yes|no)/i);
+                    if (match && match[1].toLowerCase() === "yes") {
+                        isBuilderWithMoreThan2 = true;
+                    }
+                }
+
                 // Only create marker if coordinates are valid
                 if (!isNaN(lat) && !isNaN(lng)) {
-                    // Create marker with custom icon
-                    const marker = L.marker([lat, lng], {icon: customIcon});
-                    
-                    // Bind popup with case information
+                    // Use blue exclamation icon if condition met, else default
+                    const markerIcon = isBuilderWithMoreThan2 ? blueExclamationIcon : customIcon;
+
+                    const marker = L.marker([lat, lng], {icon: markerIcon});
+
                     marker.bindPopup(`
                         <div style="min-width: 200px">
                             <h3>Case Details</h3>
@@ -639,27 +656,26 @@
                             <p><strong>Latitude:</strong> ${lat}</p>
                             <p><strong>Longitude:</strong> ${lng}</p>
                             <p><strong>Attachments:</strong> ${properAttachments.length > 0 ? properAttachments.map(attId => `<a href='https://gigaclear.my.salesforce.com/servlet/servlet.FileDownload?file=${attId}' target="_blank">${attId}</a>`).join(', ') : 'None'}</p>
+                            <p><strong>Builder >2 Properties:</strong> ${isBuilderWithMoreThan2 ? "Yes" : "No"}</p>
                         </div>
                     `);
-                    
-                    // Add to map and store reference
+
                     marker.addTo(map);
                     markers.push(marker);
                     allMarkers.push(marker);
-                    
-                    // Add click event to highlight marker and open popup
+
                     marker.on('click', function() {
                         highlightCase(index);
                     });
                 }
             });
-            
+
             // Adjust map view to show all markers
             if (markers.length > 0) {
                 const group = new L.featureGroup(markers);
                 map.fitBounds(group.getBounds().pad(0.1));
             }
-            
+
             // Update visible cases count
             document.getElementById('visible-cases').textContent = markers.length;
         }
