@@ -595,7 +595,7 @@
         function createMarkers() {
             // Clear previous markers
             clearMarkers();
-            
+
             // Define your custom icon
             const customIcon = L.icon({
                 iconUrl: 'https://gc-strapi-production.s3.eu-west-2.amazonaws.com/medium_Giganaut_with_flag_above_knee_crop_dc42a9db9e.png',
@@ -603,17 +603,31 @@
                 iconAnchor:   [15, 30],
                 popupAnchor:  [0, -30]
             });
-            
-            // Create markers for each case
+
+            // Define blue exclamation icon for special cases
+            const blueExclamationIcon = L.icon({
+                iconUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6c/Blue_exclamation_mark_icon.svg/48px-Blue_exclamation_mark_icon.svg.png',
+                iconSize: [30, 30],
+                iconAnchor: [15, 30],
+                popupAnchor: [0, -30]
+            });
+
+            // Define developer icon for subjects containing 'Developer'
+            const developerIcon = L.icon({
+                iconUrl: 'https://static.wikia.nocookie.net/charactercommunity/images/4/4c/5a60ad4aeace967f8e0269fc.png/revision/latest/thumbnail/width/360/height/360?cb=20200803051835',
+                iconSize: [30, 30],
+                iconAnchor: [15, 30],
+                popupAnchor: [0, -30]
+            });
+
             filteredCaseData.forEach((caseItem, index) => {
                 const caseNumber = caseItem[0];
                 const subject = caseItem[1];
                 const lat = parseFloat(caseItem[2]);
                 const lng = parseFloat(caseItem[3]);
                 const id = caseItem[4];
-                
-                let properAttachments = [];
 
+                let properAttachments = [];
                 try {
                     if (caseItem[5]) {
                         const attachmentIds = JSON.parse(caseItem[5]);
@@ -625,13 +639,38 @@
                     // leave properAttachments as []
                 }
 
+                // Check for '# of properties' in field (assume index 6)
+                const comments = caseItem[6] || ""; // THIS FIELD DOES NOT EXIST YET.
+                let isBuilderWithMoreThan2 = false;
+                if (comments.includes("Builder with more than 2 or more property:")) {
+                    const match = comments.match(/Builder with more than 2 or more property:\s*(yes|no)/i);
+                    if (match && match[1].toLowerCase() === "yes") {
+                        isBuilderWithMoreThan2 = true;
+                    }
+                }
+
                 // Only create marker if coordinates are valid
                 if (!isNaN(lat) && !isNaN(lng)) {
-                    // Create marker with custom icon
-                    const marker = L.marker([lat, lng], {icon: customIcon});
-                    
-                    // Bind popup with case information
-                    marker.bindPopup(`
+                    // Choose marker icon by priority:
+                    // 1) Subject contains 'Developer' (case-insensitive) -> developerIcon
+                    // 2) Builder with more than 2 properties -> blueExclamationIcon
+                    // 3) Default -> customIcon (flag)
+                    let markerIcon = customIcon;
+                    try {
+                        if (subject && /developer/i.test(subject)) {
+                            markerIcon = developerIcon;
+                        } else if (isBuilderWithMoreThan2) {
+                            markerIcon = blueExclamationIcon;
+                        }
+                    } catch (e) {
+                        markerIcon = customIcon;
+                    }
+
+                    const marker = L.marker([lat, lng], {icon: markerIcon});
+
+                    // Prepare popup content; show Builder >2 Properties only for Developer subjects
+                    const isDeveloper = subject && /developer/i.test(subject);
+                    let popupHtml = `
                         <div style="min-width: 200px">
                             <h3>Case Details</h3>
                             <p><strong>Case Number:</strong> <a href='https://gigaclear.my.salesforce.com/${id}' target="_blank">${caseNumber}</a></p>
@@ -639,27 +678,32 @@
                             <p><strong>Latitude:</strong> ${lat}</p>
                             <p><strong>Longitude:</strong> ${lng}</p>
                             <p><strong>Attachments:</strong> ${properAttachments.length > 0 ? properAttachments.map(attId => `<a href='https://gigaclear.my.salesforce.com/servlet/servlet.FileDownload?file=${attId}' target="_blank">${attId}</a>`).join(', ') : 'None'}</p>
-                        </div>
-                    `);
-                    
-                    // Add to map and store reference
+                    `;
+
+                    if (isDeveloper) {
+                        popupHtml += `<p><strong># of properties estimate:</strong> ${isBuilderWithMoreThan2 ? "Yes" : "Unknown"}</p>`;
+                    }
+
+                    popupHtml += `</div>`;
+
+                    marker.bindPopup(popupHtml);
+
                     marker.addTo(map);
                     markers.push(marker);
                     allMarkers.push(marker);
-                    
-                    // Add click event to highlight marker and open popup
+
                     marker.on('click', function() {
                         highlightCase(index);
                     });
                 }
             });
-            
+
             // Adjust map view to show all markers
             if (markers.length > 0) {
                 const group = new L.featureGroup(markers);
                 map.fitBounds(group.getBounds().pad(0.1));
             }
-            
+
             // Update visible cases count
             document.getElementById('visible-cases').textContent = markers.length;
         }
