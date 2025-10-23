@@ -630,9 +630,10 @@
                 let properAttachments = [];
                 try {
                     if (caseItem[5]) {
-                        const attachmentIds = JSON.parse(caseItem[5]);
-                        if (Array.isArray(attachmentIds)) {
-                            properAttachments = attachmentIds.map(item => item.Id);
+                        const attachmentObjs = JSON.parse(caseItem[5]);
+                        if (Array.isArray(attachmentObjs)) {
+                            // Store objects with Id and Name
+                            properAttachments = attachmentObjs.map(item => ({ Id: item.Id, Name: item.Name || item.Id }));
                         }
                     }
                 } catch (e) {
@@ -677,7 +678,7 @@
                             <p><strong>Subject:</strong> ${subject}</p>
                             <p><strong>Latitude:</strong> ${lat}</p>
                             <p><strong>Longitude:</strong> ${lng}</p>
-                            <p><strong>Attachments:</strong> ${properAttachments.length > 0 ? properAttachments.map(attId => `<a href='https://gigaclear.my.salesforce.com/servlet/servlet.FileDownload?file=${attId}' target="_blank">${attId}</a>`).join(', ') : 'None'}</p>
+                            <p><strong>Attachments:<br></strong> ${properAttachments.length > 0 ? properAttachments.map(att => `<a href='https://gigaclear.my.salesforce.com/servlet/servlet.FileDownload?file=${att.Id}' target="_blank">${att.Name}</a>`).join('<br>') : 'None'}</p>
                     `;
 
                     if (isDeveloper) {
