@@ -352,6 +352,23 @@
         .case-table-row:hover {
             background-color: #e8f4fc;
         }
+
+        /* HC badge in bottom-left */
+        .hc-badge {
+            position: fixed;
+            left: 12px;
+            bottom: 12px;
+            /* background: rgba(0,0,0,0.65); */
+            color: #1b1b1b;
+            padding: 4px;
+            border-radius: 4px;
+            font-weight: 700;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 0.6rem;
+            z-index: 1001;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
@@ -402,18 +419,25 @@
                 </div>
             </div>
             
-            <div class="case-list">
-                <h2>Cases</h2>
-                <div class="case-table-header">
-                    <span>Case Number</span>
-                    <span>Coordinates</span>
+            <div class="filters">
+                <h2>Filters</h2>
+
+                <div class="filter-section">
+                    <h3>Show points</h3>
+                    <label><input type="checkbox" id="show-normal" checked> Normal</label><br>
+                    <label><input type="checkbox" id="show-developer" checked> Developer</label><br>
+                    <label><input type="checkbox" id="show-prospect" disabled> Prospect</label>
                 </div>
-                <div id="cases-container">
-                    <div class="loading">
-                        <div class="spinner"></div>
-                        <span>Waiting for authentication...</span>
-                    </div>
+
+                <hr>
+
+                <div class="filter-section">
+                    <h3>Show overlay</h3>
+                    <label><input type="checkbox" id="overlay-communities" disabled> Communities</label><br>
+                    <label><input type="checkbox" id="overlay-opportunity" disabled> Opportunity</label><br><p style="font-size: 10px; color:#7f8c8d">Both to be added later</p>
                 </div>
+
+                <div id="status-container" class="no-results" style="margin-top:12px;">Waiting for authentication...</div>
             </div>
         </div>
     </div>
@@ -421,6 +445,9 @@
     <div class="footer">
         <p>For Internal Gigaclear use only</p>
     </div>
+
+    <!-- New bottom-left HC badge -->
+    <div class="hc-badge">Harvey Chandler & Harry Chambers</div>
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
@@ -436,6 +463,10 @@
         let map, markers = [], allMarkers = [];
         let caseData = [], filteredCaseData = [];
         let authToken = null;
+        // Filters
+        let filterShowNormal = true;
+        let filterShowDeveloper = true;
+        let filterShowProspect = false; // disabled by default
         let refreshTimer = null;
         let timeUntilRefresh = AUTO_REFRESH_INTERVAL / 1000; // in seconds
         
@@ -591,17 +622,148 @@
             showLoading(false);
         }
         
+function addOverlayFromData(map, data, options = {}) {
+    const latLngs = data.bounds.map(point => [point.lat, point.lng]);
+    
+    const style = {
+        color: options.color || 'blue',
+        fillColor: options.fillColor || '#3388ff',
+        fillOpacity: options.fillOpacity || 0.2,
+        weight: options.weight || 2,
+        ...options
+    };
+    
+    const overlay = L.polygon(latLngs, style).addTo(map);
+    
+    let label = null;
+    if (options.labelText) {
+        const center = data.boundingBox.center;
+        
+        // Create custom div overlay for the label
+        const labelDiv = L.DomUtil.create('div', 'leaflet-polygon-label');
+        labelDiv.innerHTML = options.labelText;
+        labelDiv.style.cssText = `
+            background: ${options.labelBackground || 'rgba(255,255,255,0.8)'};
+            border: 2px solid ${options.labelBorderColor || style.color};
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-weight: bold;
+            color: ${options.labelColor || '#333'};
+            text-align: center;
+            white-space: nowrap;
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            pointer-events: none;
+            position: absolute;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+        `;
+        
+        // Add area if requested
+        if (options.showArea) {
+            const area = L.GeometryUtil.geodesicArea(overlay.getLatLngs()[0]);
+            const areaText = (area / 1000000).toFixed(2) + ' km²';
+            labelDiv.innerHTML += `<br><small>${areaText}</small>`;
+            labelDiv.style.whiteSpace = 'normal';
+        }
+        
+        label = L.marker([center.lat, center.lng], {
+            icon: L.divIcon({
+                html: labelDiv,
+                className: 'polygon-label-container',
+                iconSize: null,
+                iconAnchor: [0, 0]
+            }),
+            interactive: false, // Makes it not clickable
+            zIndexOffset: 1000
+        }).addTo(map);
+    }
+    
+    if (options.fitBounds !== false) {
+        map.fitBounds(overlay.getBounds());
+    }
+    
+    return { overlay, label };
+}
+
+function getCabDetails(cab, { forceRefresh = false } = {}) {
+  const url = "https://default573dc697995245d592c551116e7191.e4.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/0eb27bf2317d438395d85fa68017bc90/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=mOOAkCQQ0ijall311t5V5tgU0RF3tfXnuMLgq_BtR0w";
+  const LS_KEY = "cabinets";
+
+  // Safely read JSON from localStorage
+  const readCache = () => {
+    try { return JSON.parse(localStorage.getItem(LS_KEY) || "{}"); }
+    catch { return {}; }
+  };
+
+  // Safely write JSON to localStorage
+  const writeCache = (obj) => {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(obj)); }
+    catch (e) { console.warn("Could not write to localStorage:", e); }
+  };
+
+  (async () => {
+    try {
+      if (!cab || typeof cab !== "string") {
+        console.error("getCabDetails: 'cab' must be a non-empty string");
+        return;
+      }
+
+      const key = cab.trim();
+      const cache = readCache();
+
+      // Use cache if available and not forcing refresh
+      if (!forceRefresh && cache[key]) {
+        console.log(`[cabinets] Cache hit for "${key}"`);
+        const data = cache[key];
+        addOverlayFromData(map, data);
+        return;
+      }
+
+      console.log(`[cabinets] Fetching fresh data for "${key}"...`);
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify({ cabinet: key, "api-key": authToken })
+      });
+
+      console.log("Status:", res.status, res.statusText);
+
+      // Parse JSON response (the flow returns JSON)
+      const data = await res.json();
+      console.log("JSON:", data);
+
+      // Update cache: cabinets : {'cab': data}
+      cache[key] = data;
+      writeCache(cache);
+
+      // Do your existing map overlay logic
+      addOverlayFromData(map, data);
+    } catch (err) {
+      console.error("Request failed:", err);
+    }
+  })();
+}
+
+
         // Create markers for all cases in filteredCaseData
         function createMarkers() {
             // Clear previous markers
             clearMarkers();
 
             // Define your custom icon
+            const H = 30;                       // desired pixel height on the map
+            const W = Math.round(H * 2 / 3);    // keep 2:3 aspect from 500x750
+
             const customIcon = L.icon({
-                iconUrl: 'https://gc-strapi-production.s3.eu-west-2.amazonaws.com/medium_Giganaut_with_flag_above_knee_crop_dc42a9db9e.png',
-                iconSize:     [30, 30],
-                iconAnchor:   [15, 30],
-                popupAnchor:  [0, -30]
+            iconUrl: 'https://gc-strapi-production.s3.eu-west-2.amazonaws.com/medium_Giganaut_with_flag_above_knee_crop_dc42a9db9e.png',
+            iconSize:    [W, H],              // e.g. [20, 30]
+            iconAnchor:  [Math.round(W/2), H],// bottom-center sits on the lat/lng
+            popupAnchor: [0, -H]              // popup starts above the icon
             });
 
             // Define blue exclamation icon for special cases
@@ -615,7 +777,7 @@
             // Define developer icon for subjects containing 'Developer'
             const developerIcon = L.icon({
                 iconUrl: 'https://www.nicepng.com/png/full/121-1213257_bob-the-builder-bob-the-builder-png.png',
-                iconSize: [30, 30],
+                iconSize: [20, 30],
                 iconAnchor: [15, 30],
                 popupAnchor: [0, -30]
             });
@@ -641,17 +803,16 @@
                 }
 
                 // Check for '# of properties' in field (assume index 6)
-                const comments = caseItem[6] || ""; // THIS FIELD DOES NOT EXIST YET.
-                let isBuilderWithMoreThan2 = false;
-                if (comments.includes("Builder with more than 2 or more property:")) {
-                    const match = comments.match(/Builder with more than 2 or more property:\s*(yes|no)/i);
-                    if (match && match[1].toLowerCase() === "yes") {
-                        isBuilderWithMoreThan2 = true;
-                    }
-                }
+                const numOfProperties = caseItem[6] || "Unknown"; // THIS FIELD DOES NOT EXIST YET.
 
                 // Only create marker if coordinates are valid
                 if (!isNaN(lat) && !isNaN(lng)) {
+                    const isDeveloper = subject && /developer/i.test(subject);
+
+                    // Respect filters: skip marker creation if its type is filtered out
+                    if ((isDeveloper && !filterShowDeveloper) || (!isDeveloper && !filterShowNormal && !filterShowProspect)) {
+                        return; // skip this marker
+                    }
                     // Choose marker icon by priority:
                     // 1) Subject contains 'Developer' (case-insensitive) -> developerIcon
                     // 2) Builder with more than 2 properties -> blueExclamationIcon
@@ -670,7 +831,6 @@
                     const marker = L.marker([lat, lng], {icon: markerIcon});
 
                     // Prepare popup content; show Builder >2 Properties only for Developer subjects
-                    const isDeveloper = subject && /developer/i.test(subject);
                     let popupHtml = `
                         <div style="min-width: 200px">
                             <h3>Case Details</h3>
@@ -682,7 +842,7 @@
                     `;
 
                     if (isDeveloper) {
-                        popupHtml += `<p><strong># of properties estimate:</strong> ${isBuilderWithMoreThan2 ? "Yes" : "Unknown"}</p>`;
+                        popupHtml += `<p><strong># of properties estimate:</strong> ${numOfProperties}</p>`;
                     }
 
                     popupHtml += `</div>`;
@@ -798,14 +958,17 @@
         
         // Show or hide loading state
         function showLoading(show, message = "Loading cases...") {
-            const casesContainer = document.getElementById('cases-container');
+            const status = document.getElementById('status-container');
+            if (!status) return;
             if (show) {
-                casesContainer.innerHTML = `
+                status.innerHTML = `
                     <div class="loading">
                         <div class="spinner"></div>
                         <span>${message}</span>
                     </div>
                 `;
+            } else {
+                status.innerHTML = '';
             }
         }
         
@@ -833,6 +996,32 @@
                     filterCases(this.value);
                 }
             });
+
+            // Filter checkboxes
+            const showNormalCb = document.getElementById('show-normal');
+            const showDeveloperCb = document.getElementById('show-developer');
+            const showProspectCb = document.getElementById('show-prospect');
+
+            if (showNormalCb) {
+                showNormalCb.addEventListener('change', (e) => {
+                    filterShowNormal = e.target.checked;
+                    createMarkers();
+                });
+            }
+
+            if (showDeveloperCb) {
+                showDeveloperCb.addEventListener('change', (e) => {
+                    filterShowDeveloper = e.target.checked;
+                    createMarkers();
+                });
+            }
+
+            if (showProspectCb) {
+                showProspectCb.addEventListener('change', (e) => {
+                    filterShowProspect = e.target.checked;
+                    createMarkers();
+                });
+            }
         });
     </script>
 </body>
