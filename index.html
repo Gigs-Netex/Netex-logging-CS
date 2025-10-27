@@ -369,6 +369,50 @@
             box-shadow: 0 2px 6px rgba(0,0,0,0.2);
             pointer-events: none;
         }
+
+        /* Sidebar collapse styles */
+        .sidebar-toggle-btn {
+            position: absolute;
+            top: 50%;
+            right: 332px; /* sits just left of sidebar (adjust to match sidebar width) */
+            transform: translateY(-50%);
+            width: 34px;
+            height: 40px;
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            display: none; /* hidden until auth is complete */
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+            z-index: 1002;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+
+        /* When collapsed move the toggle closer to the right edge */
+        .container.sidebar-collapsed .sidebar-toggle-btn {
+            right: 12px;
+        }
+
+        /* When collapsed, hide the sidebar and let the map take the space */
+        .container.sidebar-collapsed .sidebar {
+            flex: 0 0 0;
+            max-width: 0;
+            width: 0;
+            padding: 0;
+            margin: 0;
+            overflow: hidden;
+            opacity: 0;
+            transition: all 300ms ease;
+        }
+
+        /* Give map more room when collapsed */
+        .container.sidebar-collapsed #map {
+            flex: 1 1 auto;
+            transition: all 300ms ease;
+        }
     </style>
 </head>
 <body>
@@ -386,7 +430,10 @@
     
     <div class="container">
         <div id="map"></div>
-        
+
+        <!-- Sidebar toggle button -->
+        <button id="sidebar-toggle" class="sidebar-toggle-btn" title="Toggle sidebar">></button>
+
         <div class="sidebar">
             <div class="stats">
                 <h2>Statistics</h2>
@@ -493,7 +540,11 @@
             const authInput = document.getElementById('auth-input');
             const authSubmit = document.getElementById('auth-submit');
             const authError = document.getElementById('auth-error');
-            
+            const sidebarToggle = document.getElementById('sidebar-toggle');
+
+            // Ensure toggle is hidden while auth modal is visible
+            if (sidebarToggle) sidebarToggle.style.display = 'none';
+
             // Focus on input field
             setTimeout(() => authInput.focus(), 100);
             
@@ -502,6 +553,8 @@
                 const token = authInput.value.trim();
                 if (token) {
                     authToken = token;
+                    // show the toggle now that auth is successful
+                    if (sidebarToggle) sidebarToggle.style.display = 'flex';
                     modal.style.display = 'none';
                     fetchCaseData();
                     startAutoRefresh();
@@ -756,7 +809,7 @@ function getCabDetails(cab, { forceRefresh = false } = {}) {
             clearMarkers();
 
             // Define your custom icon
-            const H = 30;                       // desired pixel height on the map
+            const H = 24;                       // desired pixel height on the map
             const W = Math.round(H * 2 / 3);    // keep 2:3 aspect from 500x750
 
             const customIcon = L.icon({
@@ -777,7 +830,7 @@ function getCabDetails(cab, { forceRefresh = false } = {}) {
             // Define developer icon for subjects containing 'Developer'
             const developerIcon = L.icon({
                 iconUrl: 'https://www.nicepng.com/png/full/121-1213257_bob-the-builder-bob-the-builder-png.png',
-                iconSize: [20, 30],
+                iconSize: [20*1.3, 30*1.3],
                 iconAnchor: [15, 30],
                 popupAnchor: [0, -30]
             });
@@ -1020,6 +1073,27 @@ function getCabDetails(cab, { forceRefresh = false } = {}) {
                 showProspectCb.addEventListener('change', (e) => {
                     filterShowProspect = e.target.checked;
                     createMarkers();
+                });
+            }
+
+            // Sidebar toggle behavior: collapse/expand and resize map
+            const sidebarToggle = document.getElementById('sidebar-toggle');
+            const containerEl = document.querySelector('.container');
+
+            if (sidebarToggle && containerEl) {
+                sidebarToggle.addEventListener('click', () => {
+                    containerEl.classList.toggle('sidebar-collapsed');
+                    const collapsed = containerEl.classList.contains('sidebar-collapsed');
+
+                    // Update arrow: when collapsed show '>' to indicate expand, otherwise '<' to collapse
+                    sidebarToggle.textContent = collapsed ? '<' : '>';
+
+                    // Invalidate the map size after the CSS transition so Leaflet redraws properly
+                    setTimeout(() => {
+                        if (map && typeof map.invalidateSize === 'function') {
+                            map.invalidateSize(true);
+                        }
+                    }, 320);
                 });
             }
         });
