@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gigs-NETEX</title>
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <style>
+    :root { --bg:#0b0f19; --panel:#121826; --text:#e5e7eb; --muted:#9ca3af; --accent:#60a5fa; --danger:#ef4444; }
+    html, body { height: 100%; margin: 0; }
+    body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; }
+    #app { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+    header { display:flex; align-items:center; gap:.75rem; padding:.75rem 1rem; background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,0)); border-bottom: 1px solid rgba(255,255,255,.06); }
+    header h1 { font-size: 1rem; font-weight: 600; margin: 0; letter-spacing:.2px; }
+    header .badge { font-size:.75rem; color: var(--muted); border:1px solid rgba(255,255,255,.08); padding:.2rem .5rem; border-radius: .5rem; }
+    #map { height: 100%; width: 100%; border-radius: 14px; }
+
+    /* Floating control panel */
+    .panel { position: absolute; top: 84px; left: 14px; z-index: 1000; background: var(--panel); border: 1px solid rgba(255,255,255,.08); box-shadow: 0 10px 30px rgba(0,0,0,.35); border-radius: 12px; overflow: hidden; }
+    .panel header { padding:.6rem .8rem; background: rgba(255,255,255,.03); border-bottom: 1px solid rgba(255,255,255,.06); }
+    .panel header h2 { font-size:.9rem; margin:0; font-weight:600; }
+    .panel .content { padding:.6rem .8rem; display:flex; flex-direction:column; gap:.35rem; }
+    .panel label { display:flex; gap:.5rem; align-items:center; font-size:.9rem; cursor:pointer; }
+    .panel small { color: var(--muted); display:block; margin-top:.2rem; }
+
+    /* ensure floating panel spacing on larger screens */
+    @media(min-width:720px) {
+      .panel { left: 14px; }
+    }
+
+    /* Auth modal */
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 2000; }
+    .modal { width: 92%; max-width: 520px; background: var(--panel); border:1px solid rgba(255,255,255,.12); border-radius: 14px; box-shadow: 0 24px 60px rgba(0,0,0,.5); padding: 1rem; }
+    .modal h3 { margin: 0 0 .25rem; font-size: 1.1rem; }
+    .modal p { margin: 0 0 .75rem; color: var(--muted); font-size: .95rem; }
+    .modal .row { display:flex; gap:.5rem; }
+    .modal input { flex:1; padding:.7rem .8rem; background:#0f1524; border:1px solid rgba(255,255,255,.12); border-radius: 10px; color: var(--text); font-size: .95rem; }
+    .modal button { padding:.7rem 1rem; border-radius: 10px; border: 1px solid rgba(255,255,255,.12); background: var(--accent); color:#0b1020; font-weight:600; cursor:pointer; }
+    .modal .error { display:none; color: var(--danger); font-size: .9rem; margin-top: .6rem; }
+
+    /* Loading overlay */
+    .loading { position: fixed; inset: 0; display: none; align-items:center; justify-content:center; z-index: 1500; }
+    .spinner { width: 54px; height: 54px; border-radius: 50%; border: 4px solid rgba(255,255,255,.2); border-top-color: var(--accent); animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Leaflet tweaks for dark bg */
+    .leaflet-control-attribution { background: rgba(18,24,38,.85); color: var(--muted); border-radius: 6px; }
+    .leaflet-control-zoom { border: 1px solid rgba(255,255,255,.08)!important; box-shadow: 0 10px 20px rgba(0,0,0,.25)!important; }
+    .leaflet-bar a, .leaflet-bar a:hover { background: var(--panel); color: var(--text); border-bottom-color: rgba(255,255,255,.06); }
+  </style>
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2l7 7-7 13L5 9l7-7z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+        </svg>
+        <h1>NETEX Map – Toggle Layers</h1>
+        <span class="badge">Harvey Chandler & Harry Chambers</span>
+      </header>
+      <div id="map"></div>
+ 
+     <!-- Floating overlay toggles -->
+     <section class="panel" id="quickToggles" style="display:flex;">
+       <header><h2>Overlays</h2></header>
+       <div class="content">
+        <label><input type="checkbox" id="chkCases" checked>NETEX</label>
+        <label><input type="checkbox" id="chkCommunities" checked> Community polygons</label>
+        <small style="color:var(--muted); margin-left:22px; display:block; margin-top:4px;font-size: small;">Connect to Gigaclear VPN<br>to get communities</small>
+         <hr style="border:none;border-top:1px solid rgba(255,255,255,.04);margin:.2rem 0;">
+         <small style="color:var(--muted);">NETEX: filter by type</small>
+         <label><input type="checkbox" id="chkNormal" checked> Normal</label>
+         <label><input type="checkbox" id="chkDeveloper" checked> Developer</label>
+       </div>
+     </section>
+   </div>
+
+  <!-- Auth Modal (VISIBLE ON LOAD) -->
+  <div class="modal-backdrop" id="auth-backdrop">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+      <h3 id="auth-title">Enter API Token</h3>
+      <p>Provide your API token to load live cases.</p>
+      <div class="row">
+        <input id="auth-input" type="password" placeholder="Paste API token" autocomplete="off" />
+        <button id="auth-submit" type="button">OK</button>
+      </div>
+      <div id="auth-error" class="error">Authentication failed. Please check your API key.</div>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div class="loading" id="loading">
+    <div class="spinner" aria-label="Loading"></div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <!-- Ensure Leaflet.VectorGrid is included -->
+  <script src="https://unpkg.com/leaflet.vectorgrid/dist/Leaflet.VectorGrid.bundled.js"></script>
+
+  <script>
+    // ===== Config =====
+    const BASE_URL = "https://script.google.com/macros/s/AKfycbx7bwHsvI44exh1EuSNpeWa9MMvJvjByWUnbhqi8ROlGBgQK5iOTaVCu3wDGeMnU4p_/exec";
+    let authToken = '';
+
+    // DOM els
+    const backdrop = document.getElementById('auth-backdrop');
+    const input = document.getElementById('auth-input');
+    const submitBtn = document.getElementById('auth-submit');
+    const errBox = document.getElementById('auth-error');
+    const loading = document.getElementById('loading');
+    const togglesPanel = document.getElementById('quickToggles');
+
+    function showAuthModal() { backdrop.style.display = 'flex'; input.focus(); }
+    function hideAuthModal() { backdrop.style.display = 'none'; errBox.style.display = 'none'; }
+    function showLoading(state) { loading.style.display = state ? 'flex' : 'none'; }
+
+    // ===== Map refs (created AFTER token is provided) =====
+    let map, baseTiles, casesLayer, layerControl;
+
+    function initMap() {
+      map = L.map('map', { center: [51.505, -0.09], zoom: 12, worldCopyJump: true });
+
+      baseTiles = L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Tiles style by <a href="https://www.hotosm.org/">Humanitarian OpenStreetMap Team</a>',
+        maxZoom: 19
+      }).addTo(map);
+
+      casesLayer = L.layerGroup();
+
+      const overlays = {
+        "Cases (from API)": casesLayer,
+      };
+      // Create the control instance (do not .addTo(map) so it doesn't appear top-right)
+      layerControl = L.control.layers(null, overlays, { collapsed: false });
+      L.control.scale().addTo(map);
+
+      // Wire overlay panel's Community checkbox to create/toggle the vector layer
+      const chkCommunities = document.getElementById('chkCommunities');
+      chkCommunities.addEventListener('change', () => {
+        if (chkCommunities.checked) {
+          // create/add the layer (addCommunityPolygons will add to map)
+          addCommunityPolygons();
+        } else {
+          if (communitiesLayer && map.hasLayer(communitiesLayer)) map.removeLayer(communitiesLayer);
+        }
+      });
+
+      // Wire Cases checkbox so the casesLayer is added/removed from the map
+      const chkCases = document.getElementById('chkCases');
+      const syncCasesLayer = () => {
+        if (chkCases?.checked) {
+          if (!map.hasLayer(casesLayer)) map.addLayer(casesLayer);
+        } else {
+          if (map.hasLayer(casesLayer)) map.removeLayer(casesLayer);
+        }
+      };
+      chkCases?.addEventListener('change', syncCasesLayer);
+      // apply initial state
+      syncCasesLayer();
+
+      // Wire Normal / Developer sub-filter checkboxes to re-render cases immediately
+      const chkNormal = document.getElementById('chkNormal');
+      const chkDeveloper = document.getElementById('chkDeveloper');
+      const rerenderCases = () => {
+        // use the full fetched set so filters can be toggled without refetch
+        processCaseData(allCaseRows || []);
+      };
+      if (chkNormal) chkNormal.addEventListener('change', rerenderCases);
+      if (chkDeveloper) chkDeveloper.addEventListener('change', rerenderCases);
+      // ensure UI reflects current data immediately
+      // (if cases already loaded, re-run to apply any default checkbox state)
+      if (allCaseRows && allCaseRows.length) rerenderCases();
+
+      // create community layer if the checkbox was initially checked
+      if (chkCommunities.checked) addCommunityPolygons();
+    }
+
+    // ===== Fetch after map is ready =====
+    async function fetchCases() {
+      showLoading(true);
+
+      // Add community polygons before fetching cases
+      addCommunityPolygons();
+
+      const url = `${BASE_URL}?getCases=true&token=${encodeURIComponent(authToken)}`;
+      try {
+        const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
+        if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+        const data = await response.json();
+        allCaseRows = Array.isArray(data.rows) ? data.rows : [];
+        processCaseData(allCaseRows);
+        showLoading(false);
+      } catch (err) {
+        console.error('Fetch error:', err);
+        showLoading(false);
+        showAuthModal();
+        errBox.textContent = (String(err.message).includes('401') || String(err.message).includes('403'))
+          ? 'Authentication failed. Please check your API key.'
+          : 'Unable to load data. Please try again.';
+        errBox.style.display = 'block';
+      }
+    }
+
+    // ===== Data Processing =====
+    let filteredCaseData = [];
+    let allCaseRows = []; // store original rows so filters can re-run without refetch
+
+    function processCaseData(rows) {
+      filteredCaseData = Array.isArray(rows) ? rows.filter(r => r && r.length >= 4) : [];
+      casesLayer.clearLayers();
+      const markers = [];
+
+      // Icons: default Giganaut, override with Developer Bob when subject contains "Developer"
+      const defaultIcon = L.icon({
+        iconUrl: 'https://gc-strapi-production.s3.eu-west-2.amazonaws.com/medium_Giganaut_with_flag_above_knee_crop_dc42a9db9e.png',
+        iconSize: [25/1.5, 41/1.5],
+        iconAnchor: [12/1.5, 41/1.5],
+        popupAnchor: [1, -34],
+        shadowSize: [41, 41]
+      });
+      const developerIcon = L.icon({
+        iconUrl: 'https://www.nicepng.com/png/full/121-1213257_bob-the-builder-bob-the-builder-png.png',
+        iconSize: [26, 39],
+        iconAnchor: [13, 39],
+        popupAnchor: [0, -36]
+      });
+
+      // read filter checkbox state (default to true if UI not yet present)
+      const showNormal = (document.getElementById('chkNormal')?.checked ?? true);
+      const showDeveloper = (document.getElementById('chkDeveloper')?.checked ?? true);
+
+      filteredCaseData.forEach((caseItem) => {
+        const caseNumber = caseItem[0];
+        const subject = caseItem[1];
+        const lat = parseFloat(caseItem[2]);
+        const lng = parseFloat(caseItem[3]);
+        const id = caseItem[4];
+
+        // skip based on Normal/Developer sub-filters
+        const isDeveloper = !!(subject && subject.toString().match(/developer/i));
+        if (isDeveloper && !showDeveloper) return;
+        if (!isDeveloper && !showNormal) return;
+
+        // Parse attachments (caseItem[5])
+        let properAttachments = [];
+        try {
+          if (caseItem[5]) {
+            const attachmentObjs = JSON.parse(caseItem[5]);
+            if (Array.isArray(attachmentObjs)) {
+              // Filter valid attachments (must have Id and Name)
+              properAttachments = attachmentObjs
+                .filter(item => item && item.Id)
+                .map(item => ({
+                  Id: item.Id,
+                  Name: item.Name || `Attachment ${item.Id}` // Fallback name if missing
+                }));
+            }
+          }
+        } catch (e) {
+          console.warn(`Failed to parse attachments for case ${caseNumber}:`, e);
+        }
+
+        // Fallback for number of properties
+        const numOfProperties = caseItem[6] ?? 'Unknown';
+        if (!isFinite(lat) || !isFinite(lng)) return;
+
+        // Generate HTML for attachments
+        const attachHtml = properAttachments.length
+          ? `<ul style="margin:.3rem 0 0 .9rem; padding:0;">${properAttachments.map(a => `<li><a href='https://gigaclear.my.salesforce.com/servlet/servlet.FileDownload?file=${a.Id}' target="_blank">${a.Name}</a></li>`).join('')}</ul>`
+          : '<em>No valid attachments</em>';
+
+        // Create popup content (formatted rows)
+        const popup = `
+          <div style="min-width:240px;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;color:#0b1020">
+            <div style="background:#fff;padding:10px;border-radius:8px;border:1px solid rgba(0,0,0,0.06);box-shadow:0 6px 18px rgba(11,16,32,0.06)">
+              <div style="margin-bottom:8px;">
+                <a href="https://gigaclear.my.salesforce.com/${id}" target="_blank" style="font-weight:700;color:#0b1020;text-decoration:none;font-size:14px;">
+                  ${caseNumber || 'Unknown Case'}
+                </a>
+              </div>
+
+              <div style="margin-bottom:8px;color:#374151;font-size:13px;">
+                ${subject || '<span style="opacity:.7">No subject</span>'}
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:6px;border-top:1px solid rgba(0,0,0,0.04);padding-top:8px;margin-top:6px;">
+                ${isDeveloper ? `
+                <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#111827;">
+                  <div style="font-weight:600"># of properties (estimate)</div>
+                  <div style="opacity:.85">${numOfProperties}</div>
+                </div>` : ''}
+
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;font-size:13px;color:#111827;">
+                  <div style="font-weight:600">Attachments</div>
+                  <div style="text-align:right;max-width:160px;">
+                    ${properAttachments.length
+                      ? properAttachments.map(a => `<div style="margin-bottom:4px;"><a href="https://gigaclear.my.salesforce.com/servlet/servlet.FileDownload?file=${a.Id}" target="_blank" style="color:#2563eb;text-decoration:none">${a.Name}</a></div>`).join('')
+                      : '<span style="opacity:.7">None</span>'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+
+        // Choose icon: Developer override wins, otherwise default Giganaut
+        const markerIcon = isDeveloper ? developerIcon : defaultIcon;
+
+        // Create marker
+        const marker = L.marker([lat, lng], { icon: markerIcon }).bindPopup(popup);
+        markers.push(marker);
+        casesLayer.addLayer(marker);
+      });
+
+      // Ensure casesLayer is visible when cases checkbox is checked
+      const chkCases = document.getElementById('chkCases');
+      if (chkCases?.checked) {
+        if (!map.hasLayer(casesLayer)) map.addLayer(casesLayer);
+      } else {
+        if (map.hasLayer(casesLayer)) map.removeLayer(casesLayer);
+      }
+
+      // Fit map to markers
+      if (markers.length) {
+        const group = L.featureGroup(markers);
+        map.fitBounds(group.getBounds().pad(0.2));
+      } else {
+        console.debug('processCaseData: no markers to display (filters/CORS/data).');
+      }
+    }
+
+    // ===== Submit token FIRST, then init map and fetch =====
+    const doSubmit = () => {
+      const val = input.value.trim();
+      if (!val) { errBox.textContent = 'Token is required.'; errBox.style.display = 'block'; return; }
+      authToken = val;
+      hideAuthModal();
+      initMap();
+      fetchCases();
+    };
+
+    submitBtn.addEventListener('click', doSubmit);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSubmit(); });
+
+    // IMPORTANT: Ask for API key BEFORE ANYTHING ELSE
+    // (modal is visible by default via CSS; set focus now)
+    window.addEventListener('load', () => { input.focus(); });
+
+    let communitiesLayer = null; // Layer for community polygons
+    const COMMUNITIES_TILE_URL = "https://martin.aws.int.gigaclear.net/assetdb_current_communities/{z}/{x}/{y}";
+    let communityPolygons = []; // Store community polygon bounds for marker checks
+
+    // Function to add community polygons as an overlay
+    function addCommunityPolygons() {
+      // avoid creating / adding the same layer twice
+      if (communitiesLayer) {
+        if (!map.hasLayer(communitiesLayer)) {
+          map.addLayer(communitiesLayer);
+        }
+        return; // already created — do not recreate or register overlay again
+      }
+
+      // Use the actual source-layer name from your vector tiles (seen in map.html)
+      // and use SVG renderer so polygon fills render correctly.
+      communitiesLayer = L.vectorGrid.protobuf(COMMUNITIES_TILE_URL, {
+        vectorTileLayerStyles: {
+          // match the "source-layer" name used in your MapLibre test: "assetdb_current_communities"
+          'assetdb_current_communities': {
+            weight: 1,                // outline width
+            color: '#155a8a',        // outline color
+            fillColor: '#3388ff',    // fill color
+            fillOpacity: 0.35        // fill opacity (0..1)
+          }
+        },
+        interactive: true,
+        // SVG renderer tends to show fills better when debugging
+        rendererFactory: L.svg.tile
+      });
+
+      // Click to show name/popup (defensive for various prop keys)
+      communitiesLayer.on('click', function (e) {
+        const props = (e.layer && e.layer.properties) ? e.layer.properties : (e && e.properties) || {};
+        const name = props.name || props.community || props.label || props.NAME || 'Community';
+        if (e.latlng) {
+          L.popup({ maxWidth: 300 })
+            .setLatLng(e.latlng)
+            .setContent(`<strong>${name}</strong>`)
+            .openOn(map);
+        }
+      });
+
+      // Keep communityPolygons extraction minimal here (you can keep your PBF decode elsewhere)
+      communitiesLayer.on('load', () => {
+        // Clear any previously collected bounds (older code used bbox tests)
+        communityPolygons = [];
+        // No eachLayer available on VectorGrid; leave geometry extraction to your decoding routine
+        console.debug('communitiesLayer loaded — vector tiles should be visible with fills.');
+      });
+
+      // Register overlay once
+      try { layerControl.addOverlay(communitiesLayer, "Community Polygons"); } catch (e) {}
+      communitiesLayer.addTo(map);
+    }
+
+    // Function to check if a marker is inside any community polygon
+    function isMarkerInsidePolygon(lat, lng) {
+      const markerLatLng = L.latLng(lat, lng);
+      return communityPolygons.some(bounds => bounds.contains(markerLatLng));
+    }
+
+    // Updated fetchCases to ensure polygons are added first
+    async function fetchCases() {
+      showLoading(true);
+
+      // Add community polygons before fetching cases
+      addCommunityPolygons();
+
+      const url = `${BASE_URL}?getCases=true&token=${encodeURIComponent(authToken)}`;
+      try {
+        const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
+        if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+        const data = await response.json();
+        allCaseRows = Array.isArray(data.rows) ? data.rows : [];
+        processCaseData(allCaseRows);
+        showLoading(false);
+      } catch (err) {
+        console.error('Fetch error:', err);
+        showLoading(false);
+        showAuthModal();
+        errBox.textContent = (String(err.message).includes('401') || String(err.message).includes('403'))
+          ? 'Authentication failed. Please check your API key.'
+          : 'Unable to load data. Please try again.';
+        errBox.style.display = 'block';
+      }
+    }
+
+    // Initialize the map and overlays
+    function initMap() {
+      map = L.map('map', { center: [51.505, -0.09], zoom: 12, worldCopyJump: true });
+
+      baseTiles = L.tileLayer('https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Tiles style by <a href="https://www.hotosm.org/">Humanitarian OpenStreetMap Team</a>',
+        maxZoom: 19
+      }).addTo(map);
+
+      casesLayer = L.layerGroup();
+
+      const overlays = {
+        "Cases (from API)": casesLayer,
+      };
+      // Create the control instance (do not .addTo(map) so it doesn't appear top-right)
+      layerControl = L.control.layers(null, overlays, { collapsed: false });
+      L.control.scale().addTo(map);
+
+      // Wire overlay panel's Community checkbox to create/toggle the vector layer
+      const chkCommunities = document.getElementById('chkCommunities');
+      chkCommunities.addEventListener('change', () => {
+        if (chkCommunities.checked) {
+          // create/add the layer (addCommunityPolygons will add to map)
+          addCommunityPolygons();
+        } else {
+          if (communitiesLayer && map.hasLayer(communitiesLayer)) map.removeLayer(communitiesLayer);
+        }
+      });
+
+      // Wire Cases checkbox so the casesLayer is added/removed from the map
+      const chkCases = document.getElementById('chkCases');
+      const syncCasesLayer = () => {
+        if (chkCases?.checked) {
+          if (!map.hasLayer(casesLayer)) map.addLayer(casesLayer);
+        } else {
+          if (map.hasLayer(casesLayer)) map.removeLayer(casesLayer);
+        }
+      };
+      chkCases?.addEventListener('change', syncCasesLayer);
+      // apply initial state
+      syncCasesLayer();
+
+      // Wire Normal / Developer sub-filter checkboxes to re-render cases immediately
+      const chkNormal = document.getElementById('chkNormal');
+      const chkDeveloper = document.getElementById('chkDeveloper');
+      const rerenderCases = () => {
+        // use the full fetched set so filters can be toggled without refetch
+        processCaseData(allCaseRows || []);
+      };
+      if (chkNormal) chkNormal.addEventListener('change', rerenderCases);
+      if (chkDeveloper) chkDeveloper.addEventListener('change', rerenderCases);
+      // ensure UI reflects current data immediately
+      // (if cases already loaded, re-run to apply any default checkbox state)
+      if (allCaseRows && allCaseRows.length) rerenderCases();
+
+      // create community layer if the checkbox was initially checked
+      if (chkCommunities.checked) addCommunityPolygons();
+    }
+  </script>
+ </body>
+ </html>
