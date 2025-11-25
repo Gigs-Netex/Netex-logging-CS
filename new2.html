@@ -1,0 +1,1463 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Gigaclear Netex Map</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v8.2.0/ol.css" />
+<style>
+  :root{
+    --title-height:48px;--sidebar-width:20%;--bottombar-height:36px;
+    /* Light theme defaults */
+    --bg-app: #f5f5f5;
+    --bg-panel: #ffffff;
+    --text-main: #333333;
+    --text-muted: #666666;
+    --border-main: #dddddd;
+    --input-bg: #ffffff;
+    --input-border: #cccccc;
+    --shadow-val: rgba(0,0,0,0.18);
+  }
+  [data-theme="dark"] {
+    --bg-app: #121212;
+    --bg-panel: #1e1e1e;
+    --text-main: #e0e0e0;
+    --text-muted: #aaaaaa;
+    --border-main: #333333;
+    --input-bg: #2d2d2d;
+    --input-border: #555555;
+    --shadow-val: rgba(0,0,0,0.5);
+  }
+  html,body{height:100%;margin:0;font-family:Arial,Helvetica,sans-serif;}
+  .titlebar{
+    position:fixed;top:0;left:0;right:0;height:var(--title-height);
+    background:rgba(255, 130, 0, 1);color:#fff;display:flex;align-items:center;gap:8px;padding:0 8px;z-index:1000;
+  }
+  .titlebar .toggle{
+    background:transparent;border:1px solid rgba(255,255,255,0.15);
+    color:#fff;padding:6px 8px;border-radius:4px;cursor:pointer;
+  }
+  .titlebar .title{font-weight:700;margin-left:8px;}
+  .layout{
+    display:flex;position:fixed;top:var(--title-height);left:0;right:0;bottom:0;overflow:hidden;
+  }
+  .sidebar{
+    width:var(--sidebar-width);min-width:180px;background:var(--bg-panel);border-right:1px solid var(--border-main);color:var(--text-main);
+    overflow:auto;transition:width .25s ease,opacity .25s ease;padding:8px;box-sizing:border-box;
+  }
+  .sidebar.collapsed{width:0;min-width:0;opacity:0;padding:0;border-right:0;overflow:hidden;}
+  .content{flex:1;position:relative;overflow:hidden;} /* holds map/text + bottom tabs */
+  /* panels sit above each other; bottombar fixed at bottom of content */
+  .panel{position:absolute;top:0;left:0;right:0;bottom:0;overflow:hidden;}
+  .hidden{display:none;}
+  #map{width:100%;height:100%;}
+  #textFrame, #analyticsFrame{width:100%;height:100%;border:0;}
+  .bottombar{
+    position:absolute;left:0;right:0;bottom:0;height:var(--bottombar-height);
+    background:#eee;border-top:1px solid #ddd;display:flex;align-items:center;padding:0 8px;gap:8px;
+    z-index:800;
+  }
+  .tab{
+    padding:6px 12px;border-radius:4px;background:transparent;border:1px solid transparent;cursor:pointer;
+  }
+  .tab.active{background:#fff;border-color:#ccc;font-weight:700;}
+  /* ensure leaflet controls sit above the map UI properly */
+  .leaflet-top{z-index:900;}
+
+  /* Connection status (top-right) */
+  .status{
+    margin-left:auto;
+    padding:6px 10px;
+    border-radius:6px;
+    font-weight:700;
+    font-size:13px;
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    min-width:96px;
+    justify-content:center;
+    box-sizing:border-box;
+  }
+  .status.connecting{ background:#f0ad4e; color:#fff; border:1px solid rgba(0,0,0,0.08); }
+  .status.connected{ background:#28a745; color:#fff; border:1px solid rgba(0,0,0,0.08); }
+  .status.disconnected{ background:#6c757d; color:#fff; border:1px solid rgba(0,0,0,0.08); }
+  .status.failed{ background:#d9534f; color:#fff; border:1px solid rgba(0,0,0,0.08); }
+  .status.idle{ background:#444; color:#fff; border:1px solid rgba(0,0,0,0.08); }
+
+  /* Compact, modern popup styling */
+  #popup {
+    min-width: 220px;
+    max-width: 420px;
+    background: var(--bg-panel);
+    color: var(--text-main);
+    border-radius: 8px;
+    box-shadow: 0 6px 18px var(--shadow-val);
+    border: 1px solid var(--border-main);
+    padding: 10px 12px;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .popup-container { position: relative; }
+
+  .popup-close {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: #666;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .popup-close:hover {
+    background: rgba(0,0,0,0.06);
+    color: #222;
+  }
+
+  .popup-content {
+    max-height: 260px;
+    overflow-y: auto;
+    margin-top: 4px;
+  }
+
+  .popup-table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  .popup-table td {
+    padding: 3px 4px;
+    vertical-align: top;
+  }
+
+  .popup-key {
+    white-space: nowrap;
+    font-weight: 600;
+    padding-right: 8px;
+    color: var(--text-muted);
+    font-size: 11px;
+  }
+
+  .popup-val {
+    font-size: 11px;
+    color: var(--text-main);
+    word-wrap: break-word;
+    word-break: break-word;
+  }
+
+  .popup-val.pre {
+    margin: 0;
+    padding: 4px 6px;
+    max-height: 220px;
+    overflow: auto;
+    font-family: monospace;
+    background: #f6f6f6;
+    border-radius: 4px;
+  }
+  /* Sidebar toggle rows */
+  .sidebar-section { padding: 6px 4px; }
+  .sidebar-section h3 { margin-top: 0; color: var(--text-main); }
+  .toggle-row { display:flex; align-items:center; gap:8px; margin:6px 0; }
+  .toggle-row input[type="checkbox"] { width:16px; height:16px; }
+  .toggle-row label { cursor:pointer; font-size:13px; }
+
+  /* Auth modal */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+  }
+  .modal {
+    width: 92%;
+    max-width: 420px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-main);
+    border-radius: 10px;
+    box-shadow: 0 24px 60px var(--shadow-val);
+    padding: 1rem;
+    color: var(--text-main);
+  }
+  .modal h3 {
+    margin: 0 0 .25rem;
+    font-size: 1.05rem;
+  }
+  .modal p {
+    margin: 0 0 .75rem;
+    color: var(--text-muted);
+    font-size: .95rem;
+  }
+  .modal .row {
+    display:flex;
+    gap:.5rem;
+    margin-top: .5rem;
+  }
+  .modal input {
+    flex:1;
+    padding:.55rem .7rem;
+    background:var(--input-bg);
+    border:1px solid var(--input-border);
+    border-radius: 8px;
+    color:var(--text-main);
+    font-size: .95rem;
+  }
+  .modal button {
+    padding:.55rem .9rem;
+    border-radius: 8px;
+    border: 1px solid #d1d5db;
+    background:#2563eb;
+    color:#f9fafb;
+    font-weight:600;
+    cursor:pointer;
+    white-space: nowrap;
+  }
+  .modal button:hover {
+    background:#1d4ed8;
+  }
+  .modal .error {
+    display:none;
+    color: #b91c1c;
+    font-size: .9rem;
+    margin-top: .6rem;
+  }
+
+  /* Loading overlay */
+  .loading {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items:center;
+    justify-content:center;
+    z-index: 1500;
+  }
+  .spinner {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 4px solid rgba(0,0,0,.1);
+    border-top-color: #2563eb;
+    animation: spin 1s linear infinite;
+    background: #fff;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Theme Menu */
+  .theme-menu {
+    position: fixed;
+    top: var(--title-height);
+    right: 10px;
+    width: 260px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-main);
+    border-radius: 0 0 8px 8px;
+    box-shadow: 0 4px 12px var(--shadow-val);
+    z-index: 2000;
+    max-height: 80vh;
+    overflow-y: auto;
+    padding: 8px 0;
+    display: none;
+  }
+  .theme-menu.visible { display: block; }
+  .theme-group-title {
+    padding: 8px 12px 4px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border-main);
+    margin-bottom: 4px;
+  }
+  .theme-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-main);
+  }
+  .theme-item:hover {
+    background: rgba(0,0,0,0.05);
+  }
+  .theme-item.active {
+    background: rgba(37, 99, 235, 0.1);
+    color: #2563eb;
+    font-weight: 600;
+  }
+  .theme-check {
+    width: 16px;
+    display: inline-block;
+    text-align: center;
+    font-weight: bold;
+  }
+</style>
+</head>
+<body>
+  <div class="titlebar">
+    <button id="toggle" class="toggle" aria-expanded="true" aria-controls="sidebar">☰</button>
+    <div class="title" id="titleText" style="font-weight: bold; font-size: large">Gigaclear Netex Map</div>
+    <button id="themeToggle" class="toggle" style="margin-left:auto;">Theme ▼</button>
+    <!-- connection status added top-right -->
+    <!-- <div id="connStatus" class="status idle" aria-live="polite">Disconnected</div> -->
+  </div>
+
+  <div id="themeMenu" class="theme-menu"></div>
+
+  <div class="layout">
+    <aside id="sidebar" class="sidebar" role="navigation" aria-label="Options">
+      <div class="sidebar-section">
+        <h3 style="margin:0 0 8px 0;font-size:14px;">Overlays</h3>
+        <div class="toggle-row">
+          <input id="toggleCases" type="checkbox" />
+          <label for="toggleCases">Cases (from API)</label>
+        </div>
+        <div style="margin: 4px 0 8px 24px;">
+          <input id="caseSearch" type="text" placeholder="Search subject or UPRN..." style="width: 90%; padding: 4px; border: 1px solid var(--input-border); background: var(--input-bg); color: var(--text-main); border-radius: 4px; font-size: 13px;">
+        </div>
+        <div style="margin-left: 20px; display: flex; flex-direction: column;">
+          <div class="toggle-row">
+            <input id="toggleNormal" type="checkbox" checked />
+            <label for="toggleNormal">Normal (Blue)</label>
+          </div>
+          <div class="toggle-row">
+            <input id="toggleProspective" type="checkbox" checked />
+            <label for="toggleProspective">Prospective (Purple)</label>
+          </div>
+          <div class="toggle-row">
+            <input id="toggleDeveloper" type="checkbox" checked />
+            <label for="toggleDeveloper">Developer (Red)</label>
+          </div>
+        </div>
+        <div class="toggle-row">
+          <input id="toggleCommunities" type="checkbox" checked />
+          <label for="toggleCommunities">Toggle communities</label>
+        </div>
+        <div class="toggle-row">
+          <input id="toggleTrenches" type="checkbox" />
+          <label for="toggleTrenches">Toggle trenches</label>
+        </div>
+        <div class="toggle-row">
+          <input id="toggleClustering" type="checkbox" />
+          <label for="toggleClustering">Enable clustering</label>
+        </div>
+      </div>
+    </aside>
+
+    <div class="content">
+      <!-- Map panel -->
+      <div id="mapPanel" class="panel">
+        <div id="map"></div>
+        <div id="popup" class="ol-popup" style="display: none;"></div>
+      </div>
+
+      <!-- No extra panels or bottom tabs; just the main map panel -->
+    </div>
+  </div>
+
+  <!-- Auth Modal -->
+  <div class="modal-backdrop" id="auth-backdrop">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+      <h3 id="auth-title">Enter API Token</h3>
+      <p>Provide your API token to load live cases.</p>
+      <div class="row">
+        <input id="auth-input" type="password" placeholder="Paste API token" autocomplete="off" />
+        <button id="auth-submit" type="button">OK</button>
+      </div>
+      <div id="auth-error" class="error">Authentication failed. Please check your API key.</div>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div class="loading" id="loading">
+    <div class="spinner" aria-label="Loading"></div>
+  </div>
+
+<script src="https://cdn.jsdelivr.net/npm/ol@v8.2.0/dist/ol.js"></script>
+<!-- WebSocket client -->
+<script>
+  const sidebar = document.getElementById('sidebar');
+  const btn = document.getElementById('toggle');
+  const mapPanel = document.getElementById('mapPanel');
+  const connStatusEl = document.getElementById('connStatus');
+
+  // NETEX API config (from new.html)
+  const BASE_URL = "https://script.google.com/macros/s/AKfycbx7bwHsvI44exh1EuSNpeWa9MMvJvjByWUnbhqi8ROlGBgQK5iOTaVCu3wDGeMnU4p_/exec";
+  let authToken = '';
+
+  // Auth & loading DOM elements
+  const backdrop = document.getElementById('auth-backdrop');
+  const input = document.getElementById('auth-input');
+  const submitBtn = document.getElementById('auth-submit');
+  const errBox = document.getElementById('auth-error');
+  const loading = document.getElementById('loading');
+  const casesToggle = document.getElementById('toggleCases');
+
+  // small helper to update the status UI
+  function updateConnectionStatus(state, label) {
+    if (!connStatusEl) return;
+    connStatusEl.className = 'status ' + (state || 'idle');
+    connStatusEl.textContent = label || (state ? state[0].toUpperCase() + state.slice(1) : 'Unknown');
+  }
+
+  // initial state
+  updateConnectionStatus('idle', 'Disconnected');
+
+  // --- Theme & Base Maps Configuration ---
+  const baseMaps = [
+    // Light Themes
+    {
+      name: 'OSM Standard',
+      type: 'light',
+      source: new ol.source.OSM()
+    },
+    {
+      name: 'CartoDB Positron',
+      type: 'light',
+      source: new ol.source.XYZ({
+        url: 'https://{a-c}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+        attributions: '&copy; OpenStreetMap &copy; CARTO'
+      })
+    },
+    {
+      name: 'CartoDB Voyager',
+      type: 'light',
+      source: new ol.source.XYZ({
+        url: 'https://{a-c}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+        attributions: '&copy; OpenStreetMap &copy; CARTO'
+      })
+    },
+    {
+      name: 'Esri Light Gray',
+      type: 'light',
+      source: new ol.source.XYZ({
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+        attributions: 'Tiles &copy; Esri'
+      })
+    },
+    {
+      name: 'Esri World Street Map',
+      type: 'light',
+      source: new ol.source.XYZ({
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+        attributions: 'Tiles &copy; Esri'
+      })
+    },
+    // Dark Themes
+    {
+      name: 'CartoDB Dark Matter',
+      type: 'dark',
+      source: new ol.source.XYZ({
+        url: 'https://{a-c}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+        attributions: '&copy; OpenStreetMap &copy; CARTO'
+      })
+    },
+    {
+      name: 'Esri Dark Gray',
+      type: 'dark',
+      source: new ol.source.XYZ({
+        url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+        attributions: 'Tiles &copy; Esri'
+      })
+    }
+  ];
+
+  // Default selection
+  let currentBaseMapIndex = 0; // OSM Standard
+  let isDarkTheme = false; // Derived from selection
+
+  // Initialize map with default
+  const map = new ol.Map({
+    target: 'map',
+    layers: [
+      new ol.layer.Tile({
+        source: baseMaps[currentBaseMapIndex].source
+      }),
+      new ol.layer.Vector({
+        source: new ol.source.Vector()
+      })
+    ],
+    view: new ol.View({
+      center: ol.proj.fromLonLat([-3.4360, 55.3781]),
+      zoom: 6,
+      minZoom: 5,
+      maxZoom: 19
+    })
+  });
+
+  const markerLayer = map.getLayers().getArray()[1]; // the base vector layer (unused placeholder)
+
+  // Cases markers layer (OpenLayers)
+  const casesSource = new ol.source.Vector();
+
+  // Filters state
+  const caseFilters = {
+    normal: true,
+    prospective: true,
+    developer: true,
+    search: ''
+  };
+
+  // Helper to determine category
+  function getFeatureCategory(feature) {
+    const subject = feature.get('subject') || '';
+    if (/developer/i.test(subject)) return 'developer';
+    if (feature.get('inCommunity')) return 'normal';
+    return 'prospective';
+  }
+
+  function shouldShowFeature(feature) {
+    if (caseFilters.search) {
+      const term = caseFilters.search.toLowerCase();
+      const subject = (feature.get('subject') || '').toLowerCase();
+      const uprn = feature.get('uprn') || [];
+      
+      const matchSubject = subject.includes(term);
+      const matchUprn = uprn.some(u => String(u).toLowerCase().includes(term));
+      
+      if (!matchSubject && !matchUprn) {
+        return false;
+      }
+    }
+
+    const cat = getFeatureCategory(feature);
+    return caseFilters[cat];
+  }
+
+  // Cluster source wraps raw case features
+  const clusterSource = new ol.source.Cluster({
+    distance: 12,
+    source: casesSource,
+    geometryFunction: function(feature) {
+      if (shouldShowFeature(feature)) {
+        return feature.getGeometry();
+      }
+      return null;
+    }
+  });
+
+  // Coincident source for exact matches only (distance 0)
+  const coincidentSource = new ol.source.Cluster({
+    distance: 0,
+    source: casesSource,
+    geometryFunction: function(feature) {
+      if (shouldShowFeature(feature)) {
+        return feature.getGeometry();
+      }
+      return null;
+    }
+  });
+
+  // Style for clusters and single case points
+  const casesStyle = function (feature) {
+    const clustered = feature.get('features');
+    
+    // If not clustered (raw feature), apply filter
+    if (!clustered && !shouldShowFeature(feature)) {
+      return null;
+    }
+
+    const size = clustered ? clustered.length : 1;
+
+    if (size > 1) {
+      if (isDarkTheme) {
+        // Dark theme cluster: Dark fill, Orange stroke
+        return new ol.style.Style({
+          image: new ol.style.Circle({
+            radius: 10,
+            fill: new ol.style.Fill({ color: 'rgba(40, 40, 40, 0.9)' }),
+            stroke: new ol.style.Stroke({ color: 'rgba(255, 165, 0, 1)', width: 2 })
+          }),
+          text: new ol.style.Text({
+            text: String(size),
+            fill: new ol.style.Fill({ color: '#ffffff' }),
+            font: 'bold 11px Arial, sans-serif'
+          })
+        });
+      } else {
+        // Light theme cluster (Orange)
+        return new ol.style.Style({
+          image: new ol.style.Circle({
+            radius: 10,
+            fill: new ol.style.Fill({ color: 'rgba(255, 165, 0, 0.85)' }),
+            stroke: new ol.style.Stroke({ color: '#ffffff', width: 1.5 })
+          }),
+          text: new ol.style.Text({
+            text: String(size),
+            fill: new ol.style.Fill({ color: '#ffffff' }),
+            font: 'bold 11px Arial, sans-serif'
+          })
+        });
+      }
+    }
+
+    // single case point
+    const caseFeature = clustered ? clustered[0] : feature;
+    const cat = getFeatureCategory(caseFeature);
+    let color;
+    if (cat === 'developer') color = '#ef4444';
+    else if (cat === 'normal') color = '#2563eb';
+    else color = '#7c3aed';
+
+    if (isDarkTheme) {
+      // Dark theme: Black center, colored outline
+      return new ol.style.Style({
+        image: new ol.style.Circle({
+          radius: 4.1,
+          fill: new ol.style.Fill({ color: '#000000' }),
+          stroke: new ol.style.Stroke({ color: color, width: 2 })
+        })
+      });
+    } else {
+      // Light theme: Colored center, white outline
+      return new ol.style.Style({
+        image: new ol.style.Circle({
+          radius: 4.1,
+          fill: new ol.style.Fill({ color: color }),
+          stroke: new ol.style.Stroke({ color: '#ffffff', width: 1.4 })
+        })
+      });
+    }
+  };
+
+  const casesLayer = new ol.layer.Vector({
+    source: coincidentSource,
+    style: casesStyle
+  });
+  
+  // We'll add casesLayer after communitiesLayer so it renders above it
+  casesLayer.setVisible(false);
+
+  let allCaseRows = [];
+
+  // Add popup overlay
+  const popup = new ol.Overlay({
+    element: document.getElementById('popup'),
+    positioning: 'bottom-center',
+    stopEvent: true
+  });
+  map.addOverlay(popup);
+
+  // Click listener for popups on vector features
+  map.on('click', function(evt) {
+    const features = map.getFeaturesAtPixel(evt.pixel);
+    if (features.length > 0) {
+      let feature = features[0];
+
+      // When cases are visible, only respond to case/cluster features and ignore
+      // clicks that hit communities/trenches/background.
+      if (casesLayer.getVisible()) {
+        const clustered = feature.get('features');
+        const isCluster = Array.isArray(clustered);
+        const props = isCluster ? clustered[0].getProperties() : feature.getProperties();
+        if (!props.caseNumber) {
+          // Not a case feature/cluster -> ignore click entirely
+          return;
+        }
+      }
+
+    // If this is a cluster, zoom in a bit instead of opening a popup
+      const clustered = feature.get('features');
+      if (Array.isArray(clustered) && clustered.length > 1) {
+        const view = map.getView();
+        const currentZoom = view.getZoom();
+
+        // If all points share the same coordinate, keep cluster but zoom in slightly
+        const firstGeom = clustered[0].getGeometry();
+        let allSameCoord = true;
+        for (let i = 1; i < clustered.length; i++) {
+          const g = clustered[i].getGeometry();
+          const c1 = firstGeom.getCoordinates();
+          const c2 = g.getCoordinates();
+          if (c1[0] !== c2[0] || c1[1] !== c2[1]) {
+            allSameCoord = false;
+            break;
+          }
+        }
+
+        if (allSameCoord) {
+          // Same location: just zoom in a bit and show a simple info popup
+          view.animate({
+            center: evt.coordinate,
+            zoom: currentZoom + 1,
+            duration: 250
+          });
+
+          const count = clustered.length;
+          const infoHtml = `
+            <div class="popup-container">
+              <button class="popup-close">×</button>
+              <div class="popup-content">
+                <div style="font-weight:600;font-size:12px;margin-bottom:4px;">${count} cases at this location</div>
+                <ul style="list-style:none;padding-left:0;margin:0;max-height:180px;overflow:auto;">
+                  ${clustered.map((f) => {
+                    const p = f.getProperties();
+                    const id = p.id || '';
+                    const caseNumber = p.caseNumber || 'Unknown Case';
+                    return `<li style="margin-bottom:4px;font-size:11px;"><a href="https://gigaclear.my.salesforce.com/${escapeHtml(id)}" target="_blank" style="color:#2563eb;text-decoration:none;">${escapeHtml(caseNumber)}</a></li>`;
+                  }).join('')}
+                </ul>
+              </div>
+            </div>`;
+
+          popup.setPosition(evt.coordinate);
+          const popupEl = document.getElementById('popup');
+          popupEl.innerHTML = infoHtml;
+          popupEl.style.display = 'block';
+          const closeBtn = popupEl.querySelector('.popup-close');
+          if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+              popupEl.style.display = 'none';
+            });
+          }
+          return;
+        }
+
+        // Points are spread: zoom in enough that cluster breaks up
+        view.animate({
+          center: evt.coordinate,
+          zoom: currentZoom + 2.5,
+          duration: 250
+        });
+        // hide any currently open popup
+        document.getElementById('popup').style.display = 'none';
+        return;
+      }
+
+      // Single feature (either standalone case point or non-cluster vector feature)
+      // For cluster wrapper features, drill down to the first underlying feature
+      let propsFeature = feature;
+      const innerFeatures = feature.get('features');
+      if (Array.isArray(innerFeatures) && innerFeatures.length > 0) {
+        propsFeature = innerFeatures[0];
+      }
+
+      const props = propsFeature.getProperties();
+
+      let html;
+  if (props.caseNumber) {
+        const id = props.id || '';
+        const caseNumber = props.caseNumber || '';
+        const subject = props.subject || '';
+        const numOfProperties = props.numOfProperties ?? '';
+        const attachments = props.attachments || [];
+        const uprn = props.uprn || [];
+
+        // Case popup: only show the core fields as a simple table
+        html = `
+          <div class="popup-container">
+            <button class="popup-close">×</button>
+            <div class="popup-content">
+              <table class="popup-table">
+                <tbody>
+                  <tr>
+                    <td class="popup-key">Case Number</td>
+                    <td class="popup-val-cell">
+                      <a href="https://gigaclear.my.salesforce.com/${escapeHtml(id)}"
+                         target="_blank" style="color:#2563eb;text-decoration:none;">
+                        <span class="popup-val">${escapeHtml(caseNumber)}</span>
+                      </a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="popup-key">Subject</td>
+                    <td class="popup-val-cell"><span class="popup-val">${escapeHtml(subject)}</span></td>
+                  </tr>
+                  ${numOfProperties !== '' ? `<tr>
+                    <td class="popup-key"># properties</td>
+                    <td class="popup-val-cell"><span class="popup-val">${escapeHtml(numOfProperties)}</span></td>
+                  </tr>` : ``}
+                  <tr>
+                    <td class="popup-key">Attachments</td>
+                    <td class="popup-val-cell">
+                      ${attachments.length > 0 ? 
+                        `<ul style="margin:0;padding-left:0;list-style-type:none;">
+                          ${attachments.map(a => `<li><a href="https://gigaclear.my.salesforce.com/servlet/servlet.FileDownload?file=${a.Id}" target="_blank" style="color:#2563eb;text-decoration:none;">${escapeHtml(a.Name)}</a></li>`).join('')}
+                        </ul>` 
+                        : '<span class="popup-val" style="opacity:0.7">None</span>'}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td class="popup-key">UPRN</td>
+                    <td class="popup-val-cell">
+                      ${uprn.length > 0 ? 
+                        `<ul style="margin:0;padding-left:0;list-style-type:none;">
+                          ${uprn.map(u => `<li><span class="popup-val">${escapeHtml(u)}</span></li>`).join('')}
+                        </ul>` 
+                        : '<span class="popup-val" style="opacity:0.7">Not found</span>'}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>`;
+      } else {
+        // For non-case features (communities/trenches) keep the generic table
+        html = buildPopupContent(props);
+      }
+
+      // Recenter map on the clicked feature while leaving some vertical room for the popup
+      const view = map.getView();
+      const size = map.getSize();
+      
+      // Set popup position to the clicked coordinate + slight offset up on y axis
+      const offsetCoordinate = [evt.coordinate[0], evt.coordinate[1] + (size ? size[1] * 0.15 : 0)];
+      popup.setPosition(offsetCoordinate); 
+
+      if (size) {
+        const pixel = map.getPixelFromCoordinate(evt.coordinate);
+        // shift up slightly so popup appears above the feature without going off screen
+        const shiftedPixel = [pixel[0], pixel[1] - size[1] * 0.15];
+        const centerCoord = map.getCoordinateFromPixel(shiftedPixel);
+        view.animate({ center: centerCoord, duration: 200 });
+      }
+      document.getElementById('popup').innerHTML = html;
+      document.getElementById('popup').style.display = 'block';
+      // Add event listener for close button
+      const closeBtn = document.querySelector('#popup .popup-close');
+      if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+          document.getElementById('popup').style.display = 'none';
+        });
+      }
+    } else {
+      document.getElementById('popup').style.display = 'none';
+    }
+  });
+
+  // Change cursor to pointer when hovering over interactive features
+  map.on('pointermove', function(evt) {
+    if (evt.dragging) return;
+    const pixel = map.getEventPixel(evt.originalEvent);
+    const hit = map.hasFeatureAtPixel(pixel, {
+      layerFilter: (layer) => {
+        // If cases are visible, only show pointer for cases
+        if (casesLayer.getVisible()) {
+          return layer === casesLayer;
+        }
+        // Otherwise show pointer for anything (communities/trenches)
+        return true;
+      }
+    });
+    map.getTargetElement().style.cursor = hit ? 'pointer' : '';
+  });
+
+  // Overlays: communities and trenches vector tile templates
+  const COMMUNITIES_TILE_URL = "https://martin.aws.int.gigaclear.net/assetdb_current_communities/{z}/{x}/{y}";
+  const TRENCHES_TILE_URL = "https://martin.aws.int.gigaclear.net/assetdb_current_trenches/{z}/{x}/{y}";
+
+  let communitiesLayer = null;
+  let trenchesLayer = null;
+  
+  // Registry of currently loaded community data (geometry + name)
+  // We use a Vector source with a spatial index for fast point-in-polygon lookups
+  const communityLookupSource = new ol.source.Vector({
+    useSpatialIndex: true
+  });
+
+  // Control whether communities are visually rendered
+  let isCommunitiesVisualsOn = true;
+
+  // default style for vector tiles
+  const defaultVectorStyle = new ol.style.Style({
+    fill: new ol.style.Fill({
+      color: 'rgba(0, 0, 255, 0.5)'
+    }),
+    stroke: new ol.style.Stroke({
+      color: 'blue',
+      width: 1
+    })
+  });
+
+  // minimum zoom where trenches should be visible
+  const TRENCHES_MIN_ZOOM = 12;
+
+  function makeVectorLayer(url, attribution) {
+    return new ol.layer.VectorTile({
+      source: new ol.source.VectorTile({
+        format: new ol.format.MVT(),
+        url: url
+      }),
+      style: defaultVectorStyle
+    });
+  }
+
+  function makeCommunitiesLayer(url) {
+    const source = new ol.source.VectorTile({
+      format: new ol.format.MVT({ featureClass: ol.Feature }),
+      url: url
+    });
+
+    // Capture geometries as tiles load
+    source.on('tileloadend', (evt) => {
+      const tile = evt.tile;
+      const features = tile.getFeatures();
+      if (features && Array.isArray(features)) {
+        // Add features to the lookup source for fast indexing
+        // We clone them to ensure they are independent of the tile lifecycle
+        const clones = features.map(f => f.clone());
+        communityLookupSource.addFeatures(clones);
+        
+        // Trigger update when new data arrives
+        scheduleMembershipUpdate();
+      }
+    });
+
+    return new ol.layer.VectorTile({
+      source: source,
+      style: function(feature) {
+        if (!isCommunitiesVisualsOn) return null; // Render nothing if hidden
+        const rfs = feature.get('rfs_properties') || 0;
+        return new ol.style.Style({
+          fill: new ol.style.Fill({
+            color: rfs > 0 ? 'rgba(0,128,0,0.3)' : 'rgba(255,200,0,0.3)'
+          }),
+          stroke: new ol.style.Stroke({
+            color: rfs > 0 ? 'green' : 'orange',
+            width: 1
+          })
+        });
+      }
+    });
+  }
+
+  // Clear geometry cache when zooming (as tiles will be reloaded/replaced)
+  // map.getView().on('change:resolution', () => {
+  //   communityLookupSource.clear();
+  // });
+
+  // Best-effort classification: mark visible case features as inside/outside communities
+  function updateCaseCommunityMembership() {
+    // Only run if cases are visible. We need communities data, but the layer itself might be visually hidden.
+    if (!casesLayer.getVisible() || !communitiesLayer) {
+      // Clear the flag so style falls back to "outside"
+      casesSource.getFeatures().forEach(f => f.set('inCommunity', false, true));
+      casesLayer.changed();
+      return;
+    }
+
+    const view = map.getView();
+    const size = map.getSize();
+    if (!size) return;
+    const extent = view.calculateExtent(size);
+
+    // Case features roughly in the current view
+    const caseFeatures = casesSource.getFeatures().filter(f => {
+      const geom = f.getGeometry();
+      return geom && ol.extent.intersects(extent, geom.getExtent());
+    });
+
+    if (communityLookupSource.getFeatures().length === 0) {
+      // If we don't see any community features yet, don't change membership
+      return;
+    }
+
+    caseFeatures.forEach(caseFeature => {
+      const coord = caseFeature.getGeometry().getCoordinates();
+      
+      // Fast spatial lookup using the R-Tree index
+      const matchingFeatures = communityLookupSource.getFeaturesAtCoordinate(coord);
+      
+      let inside = false;
+      let communityName = null;
+
+      if (matchingFeatures.length > 0) {
+        inside = true;
+        // Use the first match
+        const props = matchingFeatures[0].getProperties();
+        communityName = props.name || props.Name || 'Unknown';
+      }
+
+      // Only update if we found a match. This prevents points from turning purple
+      // when zooming out (where MVT tiles might be empty/simplified).
+      if (inside) {
+        caseFeature.set('inCommunity', true, true);
+        caseFeature.set('communityName', communityName, true);
+      }
+    });
+
+    casesLayer.changed();
+    clusterSource.refresh();
+    coincidentSource.refresh();
+  }
+
+  // Debug helper requested by user
+  window.getCommunityBounds = function() {
+    return communityLookupSource.getFeatures().map(feature => {
+      const extent = feature.getGeometry().getExtent();
+      const props = feature.getProperties();
+      // Convert [minX, minY, maxX, maxY] from EPSG:3857 to LonLat
+      const min = ol.proj.toLonLat([extent[0], extent[1]]);
+      const max = ol.proj.toLonLat([extent[2], extent[3]]);
+      // Return as readable object
+      return {
+        name: props.name || props.Name || 'Unknown',
+        minLon: min[0], minLat: min[1],
+        maxLon: max[0], maxLat: max[1]
+      };
+    });
+  };
+
+  function setCommunitiesVisible(visible) {
+    isCommunitiesVisualsOn = visible;
+
+    // Always ensure layer exists and is on the map so it loads data
+    if (!communitiesLayer) {
+      communitiesLayer = makeCommunitiesLayer(COMMUNITIES_TILE_URL, 'Communities');
+    }
+    
+    // Always keep it "visible" to the engine so tiles load
+    communitiesLayer.setVisible(true);
+
+    if (!map.getLayers().getArray().includes(communitiesLayer)) {
+      // ensure communities are below cases by inserting before casesLayer
+      const layers = map.getLayers();
+      const casesIndex = layers.getArray().indexOf(casesLayer);
+      if (casesIndex >= 0) {
+        layers.insertAt(casesIndex, communitiesLayer);
+      } else {
+        map.addLayer(communitiesLayer);
+      }
+    }
+    // if cases layer not yet on map, add it above communities now
+    if (!map.getLayers().getArray().includes(casesLayer)) {
+      map.addLayer(casesLayer);
+    }
+
+    // Trigger redraw to apply new style (visible or null)
+    communitiesLayer.changed();
+
+    // communities became visible (or hidden but active); recompute membership
+    updateCaseCommunityMembership();
+  }
+
+  function setTrenchesVisible(visible) {
+    if (visible) {
+      if (!trenchesLayer) {
+        trenchesLayer = makeVectorLayer(TRENCHES_TILE_URL, 'Trenches');
+      }
+      // only show if zoomed in enough
+      if (map.getView().getZoom() >= TRENCHES_MIN_ZOOM) {
+        trenchesLayer.setVisible(true);
+        if (!map.getLayers().getArray().includes(trenchesLayer)) {
+          map.addLayer(trenchesLayer);
+        }
+      }
+    } else {
+      if (trenchesLayer) {
+        trenchesLayer.setVisible(false);
+      }
+    }
+  }
+
+  // zoom handler: ensure trenches only visible when checkbox is on AND zoom >= threshold
+  (function(){
+    const cb = document.getElementById('toggleTrenches');
+    if (!cb) return;
+    function handleZoom() {
+      const zoom = map.getView().getZoom();
+      const want = cb.checked;
+      if (!trenchesLayer) return; // nothing created yet
+      if (!want || zoom < TRENCHES_MIN_ZOOM) {
+        trenchesLayer.setVisible(false);
+      } else {
+        trenchesLayer.setVisible(true);
+        if (!map.getLayers().getArray().includes(trenchesLayer)) {
+          map.addLayer(trenchesLayer);
+        }
+      }
+    }
+    map.getView().on('change:zoom', handleZoom);
+    // run once to initialize correct visibility
+    setTimeout(handleZoom, 100);
+  })();
+
+  // Debounced membership update when view changes (pan/zoom)
+  let membershipUpdateTimeout = null;
+  function scheduleMembershipUpdate() {
+    if (membershipUpdateTimeout) clearTimeout(membershipUpdateTimeout);
+    membershipUpdateTimeout = setTimeout(() => {
+      updateCaseCommunityMembership();
+    }, 300);
+  }
+
+  function zoomToVisibleFeatures() {
+    // Only zoom if cases layer is actually visible
+    if (!casesLayer.getVisible()) return;
+    
+    const visibleFeatures = casesSource.getFeatures().filter(f => shouldShowFeature(f));
+    if (visibleFeatures.length > 0) {
+      const extent = ol.extent.createEmpty();
+      visibleFeatures.forEach(f => ol.extent.extend(extent, f.getGeometry().getExtent()));
+      
+      if (!ol.extent.isEmpty(extent)) {
+         map.getView().fit(extent, {
+           padding: [50, 50, 50, 50],
+           duration: 500,
+           maxZoom: 16
+         });
+      }
+    }
+  }
+
+  map.getView().on('change:center', scheduleMembershipUpdate);
+  map.getView().on('change:zoom', scheduleMembershipUpdate);
+
+  // Wire up sidebar toggles (they exist in DOM)
+  try {
+    const cbCases = document.getElementById('toggleCases');
+    const cbCommunities = document.getElementById('toggleCommunities');
+    const cbTrenches = document.getElementById('toggleTrenches');
+    const cbClustering = document.getElementById('toggleClustering');
+    
+    const cbNormal = document.getElementById('toggleNormal');
+    const cbProspective = document.getElementById('toggleProspective');
+    const cbDeveloper = document.getElementById('toggleDeveloper');
+    const searchInput = document.getElementById('caseSearch');
+    const themeBtn = document.getElementById('themeToggle');
+    const themeMenu = document.getElementById('themeMenu');
+
+    // Render Theme Menu
+    function renderThemeMenu() {
+      if (!themeMenu) return;
+      
+      const lightMaps = baseMaps.map((m, i) => ({...m, index: i})).filter(m => m.type === 'light');
+      const darkMaps = baseMaps.map((m, i) => ({...m, index: i})).filter(m => m.type === 'dark');
+
+      let html = '';
+      
+      // Light Group
+      html += `<div class="theme-group-title">Light Themes</div>`;
+      lightMaps.forEach(m => {
+        const active = m.index === currentBaseMapIndex ? 'active' : '';
+        const check = m.index === currentBaseMapIndex ? '✓' : '';
+        html += `<div class="theme-item ${active}" onclick="selectBaseMap(${m.index})">
+          <span class="theme-check">${check}</span>
+          <span>${m.name}</span>
+        </div>`;
+      });
+
+      // Dark Group
+      html += `<div class="theme-group-title" style="margin-top:8px;">Dark Themes</div>`;
+      darkMaps.forEach(m => {
+        const active = m.index === currentBaseMapIndex ? 'active' : '';
+        const check = m.index === currentBaseMapIndex ? '✓' : '';
+        html += `<div class="theme-item ${active}" onclick="selectBaseMap(${m.index})">
+          <span class="theme-check">${check}</span>
+          <span>${m.name}</span>
+        </div>`;
+      });
+
+      themeMenu.innerHTML = html;
+    }
+
+    // Global function to handle selection
+    window.selectBaseMap = function(index) {
+      if (index < 0 || index >= baseMaps.length) return;
+      currentBaseMapIndex = index;
+      const selected = baseMaps[index];
+      
+      // Update Map Layer
+      const baseLayer = map.getLayers().getArray()[0];
+      baseLayer.setSource(selected.source);
+
+      // Update App Theme
+      isDarkTheme = (selected.type === 'dark');
+      document.documentElement.setAttribute('data-theme', isDarkTheme ? 'dark' : 'light');
+
+      // Update Markers
+      casesLayer.changed();
+
+      // Re-render menu to show checkmark
+      renderThemeMenu();
+    };
+
+    if (themeBtn && themeMenu) {
+      themeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        themeMenu.classList.toggle('visible');
+      });
+
+      // Close menu when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!themeMenu.contains(e.target) && e.target !== themeBtn) {
+          themeMenu.classList.remove('visible');
+        }
+      });
+
+      // Initial render
+      renderThemeMenu();
+    }
+
+    function updateFilters() {
+      if (cbNormal) caseFilters.normal = cbNormal.checked;
+      if (cbProspective) caseFilters.prospective = cbProspective.checked;
+      if (cbDeveloper) caseFilters.developer = cbDeveloper.checked;
+      if (searchInput) caseFilters.search = searchInput.value;
+      
+      clusterSource.refresh();
+      coincidentSource.refresh();
+      casesLayer.changed();
+      
+      // Auto-zoom to fit results
+      zoomToVisibleFeatures();
+    }
+
+    if (cbNormal) cbNormal.addEventListener('change', updateFilters);
+    if (cbProspective) cbProspective.addEventListener('change', updateFilters);
+    if (cbDeveloper) cbDeveloper.addEventListener('change', updateFilters);
+    if (searchInput) {
+      searchInput.addEventListener('input', () => {
+        // Debounce could be added here if dataset is very large
+        updateFilters();
+      });
+    }
+
+    if (cbCases) {
+      cbCases.addEventListener('change', (ev) => {
+        const on = ev.target.checked;
+        casesLayer.setVisible(on);
+        if (on) {
+          if (!allCaseRows.length) {
+            if (!authToken) {
+              showAuthModal();
+            } else {
+              fetchCases();
+            }
+          } else {
+            // cases already loaded, recompute membership
+            updateCaseCommunityMembership();
+          }
+        }
+      });
+    }
+    if (cbCommunities) cbCommunities.addEventListener('change', (ev) => setCommunitiesVisible(ev.target.checked));
+    if (cbTrenches) cbTrenches.addEventListener('change', (ev) => setTrenchesVisible(ev.target.checked));
+    if (cbClustering) {
+      cbClustering.addEventListener('change', (ev) => {
+        casesLayer.setSource(ev.target.checked ? clusterSource : coincidentSource);
+      });
+    }
+  } catch (e) { /* ignore wiring errors */ }
+
+  // On initial load, honour default checkbox state: show communities if checked
+  (function initDefaultOverlays() {
+    const cbCommunities = document.getElementById('toggleCommunities');
+    if (cbCommunities) {
+      setCommunitiesVisible(cbCommunities.checked);
+    }
+    const cbClustering = document.getElementById('toggleClustering');
+    if (cbClustering) {
+      casesLayer.setSource(cbClustering.checked ? clusterSource : coincidentSource);
+    }
+  })();
+
+  function setCollapsed(collapsed) {
+    if (collapsed) {
+      sidebar.classList.add('collapsed');
+      btn.setAttribute('aria-expanded', 'false');
+    } else {
+      sidebar.classList.remove('collapsed');
+      btn.setAttribute('aria-expanded', 'true');
+    }
+    // give CSS transition time then refresh map size
+    setTimeout(() => map.updateSize(), 300);
+  }
+
+  btn.addEventListener('click', () => setCollapsed(sidebar.classList.toggle('collapsed')));
+
+  // start collapsed on small screens
+  if (window.innerWidth < 600) setCollapsed(true);
+
+  // Only a single map panel now; keep map sized correctly
+  function showMap() {
+    setTimeout(() => map.updateSize(), 100);
+  }
+
+  // Popup formatting helpers: escape HTML and build key/value rows
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function buildPopupContent(data) {
+    const d = data || {};
+
+    // If data is not an object, just return escaped text
+    if (d === null || typeof d !== 'object') {
+      return '<div class="popup-container"><button class="popup-close">×</button><div class="popup-content"><div>' + escapeHtml(String(d)) + '</div></div></div>';
+    }
+
+    let rows = '';
+    try {
+      for (const [k, v] of Object.entries(d)) {
+        let valHtml;
+        if (v === null || v === undefined) {
+          valHtml = '<span class="popup-val empty">(empty)</span>';
+        } else if (typeof v === 'object') {
+          const s = JSON.stringify(v);
+          valHtml = '<pre class="popup-val pre">' + escapeHtml(s) + '</pre>';
+        } else {
+          valHtml = '<span class="popup-val">' + escapeHtml(v) + '</span>';
+        }
+        rows += '<tr><td class="popup-key">' + escapeHtml(k) + '</td><td class="popup-val-cell">' + valHtml + '</td></tr>';
+      }
+    } catch (e) {
+      rows = '<tr><td colspan="2"><pre>' + escapeHtml(JSON.stringify(d, null, 2)) + '</pre></td></tr>';
+    }
+
+    return '<div class="popup-container"><button class="popup-close">×</button><div class="popup-content"><table class="popup-table"><tbody>' + rows + '</tbody></table></div></div>';
+  }
+
+  // Auth & fetching helpers
+  function showAuthModal() {
+    if (!backdrop) return;
+    backdrop.style.display = 'flex';
+    setTimeout(() => { if (input) input.focus(); }, 50);
+  }
+
+  function hideAuthModal() {
+    if (backdrop) backdrop.style.display = 'none';
+    if (errBox) errBox.style.display = 'none';
+  }
+
+  function showLoading(state) {
+    if (!loading) return;
+    loading.style.display = state ? 'flex' : 'none';
+  }
+
+  function doSubmitToken() {
+    if (!input) return;
+    const val = input.value.trim();
+    if (!val) {
+      if (errBox) {
+        errBox.textContent = 'Token is required.';
+        errBox.style.display = 'block';
+      }
+      return;
+    }
+    authToken = val;
+    hideAuthModal();
+    if (casesToggle && casesToggle.checked) {
+      fetchCases();
+    }
+  }
+
+  if (submitBtn) submitBtn.addEventListener('click', doSubmitToken);
+  if (input) input.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSubmitToken(); });
+
+  window.addEventListener('load', () => {
+    if (input) input.focus();
+    showAuthModal();
+  });
+
+  async function fetchCases() {
+    if (!authToken) {
+      showAuthModal();
+      return;
+    }
+    showLoading(true);
+    const url = `${BASE_URL}?getCases=true&token=${encodeURIComponent(authToken)}`;
+    try {
+      const response = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
+      if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+      const data = await response.json();
+      allCaseRows = Array.isArray(data.rows) ? data.rows : [];
+      processCaseData(allCaseRows);
+      showLoading(false);
+    } catch (err) {
+      console.error('Fetch error:', err);
+      showLoading(false);
+      showAuthModal();
+      if (errBox) {
+        errBox.textContent = (String(err.message).includes('401') || String(err.message).includes('403'))
+          ? 'Authentication failed. Please check your API key.'
+          : 'Unable to load data. Please try again.';
+        errBox.style.display = 'block';
+      }
+    }
+  }
+
+  function processCaseData(rows) {
+    casesSource.clear();
+    const validRows = Array.isArray(rows) ? rows.filter(r => r && r.length >= 4) : [];
+    const features = [];
+
+    validRows.forEach((caseItem) => {
+      const caseNumber = caseItem[0];
+      const subject = caseItem[1];
+      const lat = parseFloat(caseItem[2]);
+      const lng = parseFloat(caseItem[3]);
+      const id = caseItem[4];
+      
+      // Parse attachments (caseItem[5])
+      let attachments = [];
+      try {
+        if (caseItem[5]) {
+          const attachmentObjs = JSON.parse(caseItem[5]);
+          if (Array.isArray(attachmentObjs)) {
+            attachments = attachmentObjs
+              .filter(item => item && item.Id)
+              .map(item => ({
+                Id: item.Id,
+                Name: item.Name || `Attachment ${item.Id}`
+              }));
+          }
+        }
+      } catch (e) {
+        console.warn(`Failed to parse attachments for case ${caseNumber}:`, e);
+      }
+
+      const numOfProperties = caseItem[6] ?? 'Unknown';
+      
+      // Parse UPRN (index 7)
+      let uprn = [];
+      if (caseItem[7]) {
+        // Ensure it's treated as an array for the popup logic
+        uprn = [caseItem[7]];
+      }
+
+      if (!isFinite(lat) || !isFinite(lng)) return;
+
+      const coord = ol.proj.fromLonLat([lng, lat]);
+
+      const feature = new ol.Feature({
+        geometry: new ol.geom.Point(coord),
+        caseNumber,
+        subject,
+        id,
+        numOfProperties,
+        attachments,
+        uprn
+      });
+
+      features.push(feature);
+      casesSource.addFeature(feature);
+    });
+
+    if (features.length) {
+      const extent = casesSource.getExtent();
+      if (extent && extent.every(isFinite)) {
+        map.getView().fit(extent, { padding: [40, 40, 40, 40], duration: 250 });
+      }
+      // Try to color cases immediately if communities are already loaded
+      updateCaseCommunityMembership();
+    }
+  }
+</script>
+</body>
+</html>
