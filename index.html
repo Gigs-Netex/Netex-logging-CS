@@ -1073,6 +1073,38 @@
           return;
       }
 
+      // Check for POT Feature (Priority over Community)
+      // We check if the clicked feature belongs to the potsLayer
+      const isPot = map.getFeaturesAtPixel(evt.pixel, {
+          layerFilter: (l) => l === potsLayer
+      }).includes(feature);
+
+      if (isPot) {
+           const props = feature.getProperties();
+           const name = props.name || props.Name || 'POT';
+           const html = `
+              <div class="popup-container">
+                <button class="popup-close">×</button>
+                <div class="popup-content" style="padding: 6px 10px; text-align: center;">
+                  <div style="font-weight:bold; font-size:12px;">${escapeHtml(name)}</div>
+                </div>
+              </div>`;
+           
+           // Position popup slightly above the click
+           popup.setPosition(evt.coordinate);
+           const popupEl = document.getElementById('popup');
+           popupEl.innerHTML = html;
+           popupEl.style.display = 'block';
+           popup.setOffset([0, -15]);
+
+           const closeBtn = popupEl.querySelector('.popup-close');
+           if (closeBtn) closeBtn.addEventListener('click', () => popupEl.style.display = 'none');
+           return;
+      }
+      
+      // Reset offset for other popups
+      popup.setOffset([0, 0]);
+
       // When cases are visible, only respond to case/cluster features and ignore
       // clicks that hit communities/trenches/background.
       if (casesLayer.getVisible()) {
@@ -1233,43 +1265,6 @@
             </div>
           </div>`;
       } else {
-        // Check if it's a POT feature
-        const layer = map.getLayers().getArray().find(l => l.getSource && l.getSource().getFeaturesAtCoordinate && l.getSource().getFeaturesAtCoordinate(evt.coordinate).includes(feature));
-        // Since we can't easily check layer membership for vector tiles in this context without more complex logic, 
-        // we'll check properties or rely on the fact that pots have specific properties or just use generic logic.
-        // However, the user asked for POT specifically. Let's check if the feature comes from the pots layer.
-        // VectorTile features don't have a direct reference to their layer.
-        // But we can check if the feature has properties typical of a POT or if we are in the pots layer context.
-        
-        // A simpler way: check if the feature is from the pots layer using getFeaturesAtPixel with layer filter
-        const isPot = map.getFeaturesAtPixel(evt.pixel, {
-            layerFilter: (l) => l === potsLayer
-        }).includes(feature);
-
-        if (isPot) {
-             const name = props.name || props.Name || 'POT';
-             html = `
-                <div class="popup-container">
-                  <div class="popup-content" style="padding: 6px 10px; text-align: center;">
-                    <div style="font-weight:bold; font-size:12px;">${escapeHtml(name)}</div>
-                  </div>
-                </div>`;
-             
-             // Position popup slightly above the click
-             popup.setPosition(evt.coordinate);
-             const popupEl = document.getElementById('popup');
-             popupEl.innerHTML = html;
-             popupEl.style.display = 'block';
-             
-             // Offset the popup using CSS transform or margin on the element itself if needed, 
-             // but OpenLayers overlay positioning handles the anchor.
-             // The user asked for "just above like 15 pixels".
-             // We can adjust the offset in the Overlay options or dynamically here.
-             popup.setOffset([0, -15]);
-             
-             return; // Skip the generic popup logic and recentering
-        }
-
         // For non-case features (communities/trenches) keep the generic table
         html = buildPopupContent(props);
       }
