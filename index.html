@@ -375,6 +375,33 @@
     background: rgba(239, 68, 68, 0.1);
     border-radius: 4px;
   }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    cursor: pointer;
+    user-select: none;
+  }
+  .section-header:hover {
+    opacity: 0.8;
+  }
+  .section-header .arrow {
+    font-size: 10px;
+    transition: transform 0.2s;
+    color: var(--text-muted);
+  }
+  .section-header.collapsed .arrow {
+    transform: rotate(-90deg);
+  }
+  .marker-icon {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1px solid rgba(0,0,0,0.2);
+    display: inline-block;
+  }
 </style>
 </head>
 <body>
@@ -390,44 +417,72 @@
 
   <div class="layout">
     <aside id="sidebar" class="sidebar" role="navigation" aria-label="Options">
+      
+      <!-- Cases Section -->
       <div class="sidebar-section">
-        <h3 style="margin:0 0 8px 0;font-size:14px;">Overlays</h3>
-        <div class="toggle-row">
-          <input id="toggleCases" type="checkbox" />
-          <label for="toggleCases">Cases (from API)</label>
+        <div class="section-header" onclick="toggleSection('cases-content', this)">
+          <span class="arrow">▼</span>
+          <h3 style="margin:0;font-size:14px;cursor:pointer;">Cases from API</h3>
         </div>
-        <div style="margin: 4px 0 8px 24px;">
-          <input id="caseSearch" type="text" placeholder="Search subject or UPRN..." class="sidebar-input">
-        </div>
-        <div style="margin-left: 20px; display: flex; flex-direction: column;">
+        <div id="cases-content" style="display:block; margin-top:8px;">
           <div class="toggle-row">
-            <input id="toggleNormal" type="checkbox" checked />
-            <label for="toggleNormal">Normal (Orange)</label>
+            <input id="toggleCases" type="checkbox" />
+            <label for="toggleCases">Enable Cases</label>
+          </div>
+          <div style="margin: 4px 0 8px 24px;">
+            <input id="caseSearch" type="text" placeholder="Search subject or UPRN..." class="sidebar-input">
+          </div>
+          <div style="margin-left: 20px; display: flex; flex-direction: column;">
+            <div class="toggle-row">
+              <input id="toggleNormal" type="checkbox" checked />
+              <div class="marker-icon" style="background:#ff8200;"></div>
+              <label for="toggleNormal">Normal <span id="count-normal" style="font-size:11px;color:#666;">(0)</span></label>
+            </div>
+            <div class="toggle-row">
+              <input id="toggleProspective" type="checkbox" checked />
+              <div class="marker-icon" style="background:#7c3aed;"></div>
+              <label for="toggleProspective">Prospective <span id="count-prospective" style="font-size:11px;color:#666;">(0)</span></label>
+            </div>
+            <div class="toggle-row">
+              <input id="toggleDeveloper" type="checkbox" checked />
+              <div class="marker-icon" style="background:#ef4444;"></div>
+              <label for="toggleDeveloper">Developer <span id="count-developer" style="font-size:11px;color:#666;">(0)</span></label>
+            </div>
           </div>
           <div class="toggle-row">
-            <input id="toggleProspective" type="checkbox" checked />
-            <label for="toggleProspective">Prospective (Purple)</label>
+            <input id="toggleClustering" type="checkbox" />
+            <label for="toggleClustering">Enable clustering</label>
           </div>
-          <div class="toggle-row">
-            <input id="toggleDeveloper" type="checkbox" checked />
-            <label for="toggleDeveloper">Developer (Red)</label>
+          <div style="margin-top: 12px; padding: 0 4px;">
+            <button id="refreshCases" style="width: 100%; padding: 8px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">Refresh Cases</button>
           </div>
-        </div>
-        <div class="toggle-row">
-          <input id="toggleCommunities" type="checkbox" checked />
-          <label for="toggleCommunities">Toggle communities</label>
-        </div>
-        <div class="toggle-row">
-          <input id="toggleTrenches" type="checkbox" />
-          <label for="toggleTrenches">Toggle trenches</label>
-        </div>
-        <div class="toggle-row">
-          <input id="toggleClustering" type="checkbox" />
-          <label for="toggleClustering">Enable clustering</label>
         </div>
       </div>
-      <div style="margin-top: 20px; padding: 0 4px;">
-        <button id="refreshCases" style="width: 100%; padding: 10px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">Refresh Cases</button>
+
+      <!-- Show Layers Section -->
+      <div class="sidebar-section">
+        <div class="section-header" onclick="toggleSection('layers-content', this)">
+          <span class="arrow">▼</span>
+          <h3 style="margin:0;font-size:14px;cursor:pointer;">Show Layers</h3>
+        </div>
+        <div id="layers-content" style="display:block; margin-top:8px;">
+          <div class="toggle-row">
+            <input id="toggleCommunities" type="checkbox" checked />
+            <label for="toggleCommunities">Communities</label>
+          </div>
+          <div class="toggle-row">
+            <input id="toggleTrenches" type="checkbox" />
+            <label for="toggleTrenches">Trenches</label>
+          </div>
+          <div class="toggle-row">
+            <input id="togglePots" type="checkbox" />
+            <label for="togglePots">Pots</label>
+          </div>
+          <div class="toggle-row">
+            <input id="togglePiaDucts" type="checkbox" />
+            <label for="togglePiaDucts">PIA Ducts</label>
+          </div>
+        </div>
       </div>
       
       <div id="opportunities-section" style="margin-top: 20px; padding: 0 4px;">
@@ -894,7 +949,7 @@
 
       if (features.length > 0) {
           opportunitiesSource.addFeatures(features);
-          addOpportunityToSidebar(cabinetName);
+          addOpportunityToSidebar(cabinetName, features.length);
           
           // Zoom to extent of new features
           const extent = ol.extent.createEmpty();
@@ -903,7 +958,7 @@
       }
   }
 
-  function addOpportunityToSidebar(cabinetName) {
+  function addOpportunityToSidebar(cabinetName, count) {
       const container = document.getElementById('opportunities-section');
       const list = document.getElementById('opportunities-list');
       
@@ -913,7 +968,7 @@
       li.id = `opp-group-${cabinetName}`;
       li.innerHTML = `
           <span class="remove-opp-btn" onclick="removeOpportunityGroup('${cabinetName}')">x</span>
-          <span>${cabinetName}</span>
+          <span>${cabinetName} (${count})</span>
       `;
       list.appendChild(li);
   }
@@ -937,6 +992,71 @@
       */
   };
 
+  // Collapsible sections logic
+  window.toggleSection = function(id, header) {
+    const content = document.getElementById(id);
+    if (content.style.display === 'none') {
+      content.style.display = 'block';
+      header.classList.remove('collapsed');
+    } else {
+      content.style.display = 'none';
+      header.classList.add('collapsed');
+    }
+  };
+
+  // Update case counts periodically
+  function updateCaseCounts() {
+    if (!allCaseRows || allCaseRows.length === 0) {
+      document.getElementById('count-normal').textContent = '(0)';
+      document.getElementById('count-prospective').textContent = '(0)';
+      document.getElementById('count-developer').textContent = '(0)';
+      return;
+    }
+
+    let normal = 0;
+    let prospective = 0;
+    let developer = 0;
+
+    // We need to re-evaluate categories based on current data
+    // Since we don't store the category on the row directly in a simple way, 
+    // we can iterate the features in the source if they are loaded, 
+    // OR re-run the logic on allCaseRows.
+    // Using features is better as it reflects what's actually processed.
+    
+    // However, features might be filtered. We want total counts of "what exists" 
+    // or "what is currently shown"? The user said "how many exist".
+    // Let's count from allCaseRows using the same logic as getFeatureCategory.
+    
+    // We need a helper that works on raw rows or we can just iterate the source features 
+    // if we assume all rows are loaded into features (which they are, just visibility toggled).
+    // Actually, `casesSource` contains all features. `clusterSource` filters them.
+    // So we should count from `casesSource`.
+
+    casesSource.getFeatures().forEach(f => {
+      const cat = getFeatureCategory(f);
+      if (cat === 'normal') normal++;
+      else if (cat === 'prospective') prospective++;
+      else if (cat === 'developer') developer++;
+    });
+
+    document.getElementById('count-normal').textContent = `(${normal})`;
+    document.getElementById('count-prospective').textContent = `(${prospective})`;
+    document.getElementById('count-developer').textContent = `(${developer})`;
+  }
+
+  // Run count update every 5 seconds
+  setInterval(updateCaseCounts, 5000);
+  
+  // Also run it whenever data is processed
+  const originalProcessCaseData = processCaseData;
+  processCaseData = function(rows) {
+      originalProcessCaseData(rows);
+      updateCaseCounts();
+  };
+
+  // --- End Theme & Base Maps Configuration ---
+
+  // --- Map Interaction and Data Handling ---
   // Click listener for popups on vector features
   map.on('click', function(evt) {
     const features = map.getFeaturesAtPixel(evt.pixel);
@@ -1113,9 +1233,49 @@
             </div>
           </div>`;
       } else {
+        // Check if it's a POT feature
+        const layer = map.getLayers().getArray().find(l => l.getSource && l.getSource().getFeaturesAtCoordinate && l.getSource().getFeaturesAtCoordinate(evt.coordinate).includes(feature));
+        // Since we can't easily check layer membership for vector tiles in this context without more complex logic, 
+        // we'll check properties or rely on the fact that pots have specific properties or just use generic logic.
+        // However, the user asked for POT specifically. Let's check if the feature comes from the pots layer.
+        // VectorTile features don't have a direct reference to their layer.
+        // But we can check if the feature has properties typical of a POT or if we are in the pots layer context.
+        
+        // A simpler way: check if the feature is from the pots layer using getFeaturesAtPixel with layer filter
+        const isPot = map.getFeaturesAtPixel(evt.pixel, {
+            layerFilter: (l) => l === potsLayer
+        }).includes(feature);
+
+        if (isPot) {
+             const name = props.name || props.Name || 'POT';
+             html = `
+                <div class="popup-container">
+                  <div class="popup-content" style="padding: 6px 10px; text-align: center;">
+                    <div style="font-weight:bold; font-size:12px;">${escapeHtml(name)}</div>
+                  </div>
+                </div>`;
+             
+             // Position popup slightly above the click
+             popup.setPosition(evt.coordinate);
+             const popupEl = document.getElementById('popup');
+             popupEl.innerHTML = html;
+             popupEl.style.display = 'block';
+             
+             // Offset the popup using CSS transform or margin on the element itself if needed, 
+             // but OpenLayers overlay positioning handles the anchor.
+             // The user asked for "just above like 15 pixels".
+             // We can adjust the offset in the Overlay options or dynamically here.
+             popup.setOffset([0, -15]);
+             
+             return; // Skip the generic popup logic and recentering
+        }
+
         // For non-case features (communities/trenches) keep the generic table
         html = buildPopupContent(props);
       }
+
+      // Reset offset for standard popups
+      popup.setOffset([0, 0]);
 
       // Recenter map on the clicked feature while leaving some vertical room for the popup
       const view = map.getView();
@@ -1169,9 +1329,13 @@
   // Overlays: communities and trenches vector tile templates
   const COMMUNITIES_TILE_URL = "https://martin.aws.int.gigaclear.net/assetdb_current_communities/{z}/{x}/{y}";
   const TRENCHES_TILE_URL = "https://martin.aws.int.gigaclear.net/assetdb_current_trenches/{z}/{x}/{y}";
+  const POTS_TILE_URL = "https://martin.aws.int.gigaclear.net/assetdb_current_pots/{z}/{x}/{y}";
+  const PIA_DUCTS_TILE_URL = "https://martin.aws.int.gigaclear.net/ducts_latest/{z}/{x}/{y}";
 
   let communitiesLayer = null;
   let trenchesLayer = null;
+  let potsLayer = null;
+  let piaDuctsLayer = null;
   
   // Registry of currently loaded community data (geometry + name)
   // We use a Vector source with a spatial index for fast point-in-polygon lookups
@@ -1261,13 +1425,13 @@
   // minimum zoom where trenches should be visible
   const TRENCHES_MIN_ZOOM = 13;
 
-  function makeVectorLayer(url, attribution) {
+  function makeVectorLayer(url, attribution, style) {
     return new ol.layer.VectorTile({
       source: new ol.source.VectorTile({
         format: new ol.format.MVT(),
         url: url
       }),
-      style: defaultVectorStyle
+      style: style || defaultVectorStyle
     });
   }
 
@@ -1453,6 +1617,52 @@
     }
   }
 
+  function setPotsVisible(visible) {
+    if (visible) {
+      if (!potsLayer) {
+        const potsStyle = new ol.style.Style({
+          image: new ol.style.Circle({
+            radius: 3,
+            fill: new ol.style.Fill({color: '#555'}),
+            stroke: new ol.style.Stroke({color: '#fff', width: 1})
+          })
+        });
+        potsLayer = makeVectorLayer(POTS_TILE_URL, 'Pots', potsStyle);
+      }
+      potsLayer.setVisible(true);
+      if (!map.getLayers().getArray().includes(potsLayer)) {
+        map.addLayer(potsLayer);
+      }
+    } else {
+      if (potsLayer) {
+        potsLayer.setVisible(false);
+      }
+    }
+  }
+
+  function setPiaDuctsVisible(visible) {
+    if (visible) {
+      if (!piaDuctsLayer) {
+        // Simple style for PIA Ducts (e.g. thin green line)
+        const piaStyle = new ol.style.Style({
+          stroke: new ol.style.Stroke({
+            color: '#228b22',
+            width: 1.5
+          })
+        });
+        piaDuctsLayer = makeVectorLayer(PIA_DUCTS_TILE_URL, 'PIA Ducts', piaStyle);
+      }
+      piaDuctsLayer.setVisible(true);
+      if (!map.getLayers().getArray().includes(piaDuctsLayer)) {
+        map.addLayer(piaDuctsLayer);
+      }
+    } else {
+      if (piaDuctsLayer) {
+        piaDuctsLayer.setVisible(false);
+      }
+    }
+  }
+
   // zoom handler: ensure trenches only visible when checkbox is on AND zoom >= threshold
   (function(){
     const cb = document.getElementById('toggleTrenches');
@@ -1529,6 +1739,8 @@
     const btnRefresh = document.getElementById('refreshCases');
     const cbCommunities = document.getElementById('toggleCommunities');
     const cbTrenches = document.getElementById('toggleTrenches');
+    const cbPots = document.getElementById('togglePots');
+    const cbPiaDucts = document.getElementById('togglePiaDucts');
     const cbClustering = document.getElementById('toggleClustering');
     
     const cbNormal = document.getElementById('toggleNormal');
@@ -1659,6 +1871,7 @@
         allCaseRows = [];
         casesSource.clear();
         
+               
         // Ensure the checkbox is checked and layer is visible
         if (cbCases) {
           cbCases.checked = true;
@@ -1672,11 +1885,35 @@
 
     if (cbCommunities) cbCommunities.addEventListener('change', (ev) => setCommunitiesVisible(ev.target.checked));
     if (cbTrenches) cbTrenches.addEventListener('change', (ev) => setTrenchesVisible(ev.target.checked));
+    if (cbPots) cbPots.addEventListener('change', (ev) => setPotsVisible(ev.target.checked));
+    if (cbPiaDucts) cbPiaDucts.addEventListener('change', (ev) => setPiaDuctsVisible(ev.target.checked));
     if (cbClustering) {
       cbClustering.addEventListener('change', (ev) => {
         casesLayer.setSource(ev.target.checked ? clusterSource : coincidentSource);
       });
     }
+
+    // Make toggle rows clickable
+    document.addEventListener('DOMContentLoaded', () => {
+      const toggleRows = document.querySelectorAll('.toggle-row');
+      toggleRows.forEach(row => {
+        row.addEventListener('click', (e) => {
+          // If the click was on the input itself, do nothing (let it toggle)
+          if (e.target.tagName === 'INPUT') return;
+          
+          // Find the checkbox in this row
+          const checkbox = row.querySelector('input[type="checkbox"]');
+          if (checkbox) {
+            checkbox.checked = !checkbox.checked;
+            // Trigger change event manually
+            const event = new Event('change');
+            checkbox.dispatchEvent(event);
+          }
+        });
+        // Add cursor pointer to indicate clickability
+        row.style.cursor = 'pointer';
+      });
+    });
   } catch (e) { /* ignore wiring errors */ }
 
   // On initial load, honour default checkbox state: show communities if checked
@@ -1727,7 +1964,7 @@
     const d = data || {};
 
     // If data is not an object, just return escaped text
-    if (d === null || typeof d !== 'object') {
+    if ( d === null || typeof d !== 'object') {
       return '<div class="popup-container"><button class="popup-close">×</button><div class="popup-content"><div>' + escapeHtml(String(d)) + '</div></div></div>';
     }
 
