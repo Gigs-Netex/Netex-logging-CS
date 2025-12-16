@@ -43,7 +43,7 @@
   }
   .sidebar{
     width:var(--sidebar-width);min-width:180px;background:var(--bg-panel);border-right:1px solid var(--border-main);color:var(--text-main);
-    overflow:auto;transition:width .25s ease,opacity .25s ease;padding:16px;box-sizing:border-box;
+    overflow:auto;transition:width .25s ease,opacity .25s ease;padding:8px;box-sizing:border-box;
     box-shadow: 2px 0 12px rgba(0,0,0,0.05);
   }
   .sidebar.collapsed{width:0;min-width:0;opacity:0;padding:0;border-right:0;overflow:hidden;}
@@ -166,24 +166,24 @@
   /* Sidebar toggle rows */
   .sidebar-section { 
     padding: 0; 
-    margin-bottom: 24px;
+    margin-bottom: 8px;
   }
   .sidebar-section h3 { 
     margin-top: 0; 
-    margin-bottom: 12px;
+    margin-bottom: 4px;
     color: var(--text-main); 
     font-weight: 600;
     letter-spacing: 0.5px;
     text-transform: uppercase;
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-muted);
   }
   .toggle-row { 
     display:flex; 
     align-items:center; 
-    gap:10px; 
-    margin:8px 0; 
-    padding: 6px 8px;
+    gap:6px; 
+    margin:1px 0; 
+    padding: 3px 6px;
     border-radius: 6px;
     transition: background 0.2s;
   }
@@ -191,26 +191,26 @@
     background: rgba(0,0,0,0.03);
   }
   .toggle-row input[type="checkbox"] { 
-    width:16px; 
-    height:16px; 
+    width:14px; 
+    height:14px; 
     accent-color: #2563eb;
     cursor: pointer;
   }
   .toggle-row label { 
     cursor:pointer; 
-    font-size:14px; 
+    font-size:12px; 
     font-weight: 500;
     color: var(--text-main);
   }
   
   .sidebar-input {
     width: 100%; 
-    padding: 8px 10px; 
+    padding: 4px 6px; 
     border: 1px solid var(--input-border); 
     background: var(--input-bg); 
     color: var(--text-main); 
     border-radius: 6px; 
-    font-size: 13px;
+    font-size: 12px;
     box-sizing: border-box;
     transition: border-color 0.2s, box-shadow 0.2s;
   }
@@ -402,6 +402,25 @@
     border: 1px solid rgba(0,0,0,0.2);
     display: inline-block;
   }
+
+  .filter-btn {
+    padding: 4px;
+    font-size: 11px;
+    border: 1px solid var(--border-main);
+    background: var(--bg-panel);
+    color: var(--text-main);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .filter-btn.active {
+    background: #2563eb;
+    color: white;
+    border-color: #2563eb;
+  }
+  .filter-btn:hover:not(.active) {
+    background: rgba(0,0,0,0.05);
+  }
 </style>
 </head>
 <body>
@@ -422,39 +441,39 @@
       <div class="sidebar-section">
         <div class="section-header" onclick="toggleSection('cases-content', this)">
           <span class="arrow">▼</span>
-          <h3 style="margin:0;font-size:14px;cursor:pointer;">Cases from API</h3>
+          <h3 style="margin:0;font-size:12px;cursor:pointer;">Cases from API</h3>
         </div>
-        <div id="cases-content" style="display:block; margin-top:8px;">
+        <div id="cases-content" style="display:block; margin-top:4px;">
           <div class="toggle-row">
             <input id="toggleCases" type="checkbox" />
             <label for="toggleCases">Enable Cases</label>
           </div>
-          <div style="margin: 4px 0 8px 24px;">
+          <div style="margin: 2px 0 4px 12px;">
             <input id="caseSearch" type="text" placeholder="Search subject or UPRN..." class="sidebar-input">
           </div>
-          <div style="margin-left: 20px; display: flex; flex-direction: column;">
+          <div style="margin-left: 12px; display: flex; flex-direction: column;">
             <div class="toggle-row">
               <input id="toggleNormal" type="checkbox" checked />
               <div class="marker-icon" style="background:#ff8200;"></div>
-              <label for="toggleNormal">Normal <span id="count-normal" style="font-size:11px;color:#666;">(0)</span></label>
+              <label for="toggleNormal">Normal <span id="count-normal" style="font-size:10px;color:#666;">(0)</span></label>
             </div>
             <div class="toggle-row">
               <input id="toggleProspective" type="checkbox" checked />
               <div class="marker-icon" style="background:#7c3aed;"></div>
-              <label for="toggleProspective">Prospective <span id="count-prospective" style="font-size:11px;color:#666;">(0)</span></label>
+              <label for="toggleProspective">Prospective <span id="count-prospective" style="font-size:10px;color:#666;">(0)</span></label>
             </div>
             <div class="toggle-row">
               <input id="toggleDeveloper" type="checkbox" checked />
               <div class="marker-icon" style="background:#ef4444;"></div>
-              <label for="toggleDeveloper">Developer <span id="count-developer" style="font-size:11px;color:#666;">(0)</span></label>
+              <label for="toggleDeveloper">Developer <span id="count-developer" style="font-size:10px;color:#666;">(0)</span></label>
             </div>
           </div>
           <div class="toggle-row">
             <input id="toggleClustering" type="checkbox" />
             <label for="toggleClustering">Enable clustering</label>
           </div>
-          <div style="margin-top: 12px; padding: 0 4px;">
-            <button id="refreshCases" style="width: 100%; padding: 8px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">Refresh Cases</button>
+          <div style="margin-top: 6px; padding: 0 4px;">
+            <button id="refreshCases" style="width: 100%; padding: 6px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">Refresh Cases</button>
           </div>
         </div>
       </div>
@@ -463,13 +482,27 @@
       <div class="sidebar-section">
         <div class="section-header" onclick="toggleSection('layers-content', this)">
           <span class="arrow">▼</span>
-          <h3 style="margin:0;font-size:14px;cursor:pointer;">Show Layers</h3>
+          <h3 style="margin:0;font-size:12px;cursor:pointer;">Show Layers</h3>
         </div>
-        <div id="layers-content" style="display:block; margin-top:8px;">
+        <div id="layers-content" style="display:block; margin-top:4px;">
           <div class="toggle-row">
             <input id="toggleCommunities" type="checkbox" checked />
             <label for="toggleCommunities">Communities</label>
           </div>
+          
+          <!-- Community Penetration Filter -->
+          <div style="margin: 8px 0 8px 12px; padding-right: 8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+              <label style="font-size:11px; font-weight:600; color:var(--text-muted);">Penetration Filter</label>
+              <span id="penVal" style="font-size:11px; font-weight:bold; color:var(--text-main);">0%</span>
+            </div>
+            <input id="penSlider" type="range" min="0" max="100" value="0" step="1" style="width:100%; cursor:pointer;">
+            <div style="display:flex; gap:4px; margin-top:4px;">
+              <button id="penAbove" class="filter-btn active" style="flex:1;">Above</button>
+              <button id="penBelow" class="filter-btn" style="flex:1;">Below</button>
+            </div>
+          </div>
+
           <div class="toggle-row">
             <input id="toggleTrenches" type="checkbox" />
             <label for="toggleTrenches">Trenches</label>
@@ -485,10 +518,10 @@
         </div>
       </div>
       
-      <div id="opportunities-section" style="margin-top: 20px; padding: 0 4px;">
-        <h3 style="margin:0 0 8px 0;font-size:14px;">Opportunities</h3>
+      <div id="opportunities-section" style="margin-top: 12px; padding: 0 4px;">
+        <h3 style="margin:0 0 4px 0;font-size:12px;">Opportunities</h3>
         <ul id="opportunities-list" style="list-style: none; padding: 0; margin: 0;"></ul>
-        <div style="font-size: 11px; color: var(--text-muted); margin-top: 8px; font-style: italic; line-height: 1.4;">
+        <div style="font-size: 10px; color: var(--text-muted); margin-top: 8px; font-style: italic; line-height: 1.4;">
           (To find opportunities, turn Cases on and click a community)
         </div>
       </div>
@@ -805,6 +838,58 @@
   map.addLayer(opportunitiesLayer);
 
   let allCaseRows = [];
+  let comPen = {};
+  let comPenDataFetched = false;
+
+  async function fetchComPenData() {
+    if (!authToken || comPenDataFetched) return;
+    
+    try {
+      // Fetch total properties per community
+      const totalRes = await fetch("https://default573dc697995245d592c551116e7191.e4.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/21dee0139b034a3ba1357ccb51a45f89/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=v4kCLFroNzRHpMHB_Mq8xtRDpDozu5DPC8YdxoBQJRk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ auth: authToken, type: "total" })
+      });
+      const totalData = await totalRes.json();
+
+      // Fetch live services (pen) per community
+      const penRes = await fetch("https://default573dc697995245d592c551116e7191.e4.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/21dee0139b034a3ba1357ccb51a45f89/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=v4kCLFroNzRHpMHB_Mq8xtRDpDozu5DPC8YdxoBQJRk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ auth: authToken, type: "pen" })
+      });
+      const penData = await penRes.json();
+
+      if (totalData && totalData.records && penData && penData.records) {
+        const totals = {};
+        totalData.records.forEach(r => {
+          if (r.Name) totals[r.Name] = r.expr0 || 0;
+        });
+
+        const pens = {};
+        penData.records.forEach(r => {
+          if (r.Name) pens[r.Name] = r.expr0 || 0;
+        });
+
+        // Calculate percentage for each community found in totals
+        for (const name in totals) {
+          const total = totals[name];
+          const live = pens[name] || 0;
+          if (total > 0) {
+            const percentage = (live / total) * 100;
+            comPen[name] = parseFloat(percentage.toFixed(3));
+          } else {
+            comPen[name] = 0;
+          }
+        }
+        comPenDataFetched = true;
+        console.log("Community penetration data loaded:", comPen);
+      }
+    } catch (err) {
+      console.error("Error fetching community penetration data:", err);
+    }
+  }
 
   // Add popup overlay
   const popup = new ol.Overlay({
@@ -1456,8 +1541,23 @@
       source: source,
       style: function(feature) {
         if (!isCommunitiesVisualsOn) return null; // Render nothing if hidden
-        const rfs = feature.get('rfs_properties') || 0;
+        
         const name = feature.get('name') || feature.get('Name');
+        
+        // Apply penetration filter
+        if (comPenDataFetched && name) {
+          const pen = comPen[name] || 0;
+          const threshold = parseInt(document.getElementById('penSlider').value, 10);
+          const isAbove = document.getElementById('penAbove').classList.contains('active');
+          
+          if (isAbove) {
+            if (pen < threshold) return null;
+          } else {
+            if (pen > threshold) return null;
+          }
+        }
+
+        const rfs = feature.get('rfs_properties') || 0;
 
         const style = new ol.style.Style({
           fill: new ol.style.Fill({
@@ -2013,6 +2113,10 @@
     }
     authToken = val;
     hideAuthModal();
+
+    // Fetch community penetration data once
+    fetchComPenData();
+
     if (casesToggle && casesToggle.checked) {
       fetchCases();
     }
@@ -2051,6 +2155,41 @@
         errBox.style.display = 'block';
       }
     }
+  }
+
+  // Penetration Filter Logic
+  const penSlider = document.getElementById('penSlider');
+  const penVal = document.getElementById('penVal');
+  const penAbove = document.getElementById('penAbove');
+  const penBelow = document.getElementById('penBelow');
+
+  function updatePenFilter() {
+    if (communitiesLayer) {
+      communitiesLayer.changed();
+    }
+  }
+
+  if (penSlider) {
+    penSlider.addEventListener('input', (e) => {
+      penVal.textContent = e.target.value + '%';
+      updatePenFilter();
+    });
+  }
+
+  if (penAbove) {
+    penAbove.addEventListener('click', () => {
+      penAbove.classList.add('active');
+      penBelow.classList.remove('active');
+      updatePenFilter();
+    });
+  }
+
+  if (penBelow) {
+    penBelow.addEventListener('click', () => {
+      penBelow.classList.add('active');
+      penAbove.classList.remove('active');
+      updatePenFilter();
+    });
   }
 
   function processCaseData(rows) {
