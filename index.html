@@ -427,6 +427,7 @@
   <div class="titlebar">
     <button id="toggle" class="toggle" aria-expanded="true" aria-controls="sidebar">☰</button>
     <div class="title" id="titleText" style="font-weight: bold; font-size: large">Gigaclear Netex Map</div>
+    <input id="communitySearch" type="text" placeholder="Search communities..." style="margin-left: 16px; padding: 5px 8px; border-radius: 4px; border: none; font-size: 13px; color: #333; width: 220px; outline: none;" />
     <button id="themeToggle" class="toggle" style="margin-left:auto;">Theme ▼</button>
     <!-- connection status added top-right -->
     <!-- <div id="connStatus" class="status idle" aria-live="polite">Disconnected</div> -->
@@ -520,6 +521,7 @@
       
       <div id="opportunities-section" style="margin-top: 12px; padding: 0 4px;">
         <h3 style="margin:0 0 4px 0;font-size:12px;">Opportunities</h3>
+        <button id="btn-show-all-opps" style="width:100%; margin-bottom:6px; padding:4px; font-size:11px; cursor:pointer;" disabled>Show All Opportunities</button>
         <ul id="opportunities-list" style="list-style: none; padding: 0; margin: 0;"></ul>
         <div style="font-size: 10px; color: var(--text-muted); margin-top: 8px; font-style: italic; line-height: 1.4;">
           (To find opportunities, turn Cases on and click a community)
@@ -824,42 +826,101 @@
   
   const opportunitiesStyle = new ol.style.Style({
     image: new ol.style.Circle({
-      radius: 6,
+      radius: 3.1,
       fill: new ol.style.Fill({ color: '#ffffff' }),
-      stroke: new ol.style.Stroke({ color: '#000000', width: 2 })
+      stroke: new ol.style.Stroke({ color: '#000000', width: 0.8 })
     })
   });
 
   const opportunitiesLayer = new ol.layer.Vector({
     source: opportunitiesSource,
     style: opportunitiesStyle,
-    zIndex: 1000 // Ensure it's on top
+    zIndex: 1000, // Ensure it's on top
+    minZoom: 10
   });
   map.addLayer(opportunitiesLayer);
 
   let allCaseRows = [];
   let comPen = {};
   let comPenDataFetched = false;
+  let cabinetGroups = [];
+  const opportunitiesCache = new Map();
+
+  function groupCabinets(cabinets) {
+    // Sort by expr0 descending
+    const sorted = [...cabinets].sort((a, b) => (b.expr0 || 0) - (a.expr0 || 0));
+    
+    const groups = [];
+    const MAX_SIZE = 1000;
+
+    for (const cab of sorted) {
+        const size = cab.expr0 || 0;
+        
+        // If size > MAX_SIZE, it must go alone
+        if (size > MAX_SIZE) {
+            groups.push({ sum: size, cabinets: [cab] });
+            continue;
+        }
+
+        let placed = false;
+        // First Fit
+        for (const group of groups) {
+            if (group.sum + size <= MAX_SIZE) {
+                group.cabinets.push(cab);
+                group.sum += size;
+                placed = true;
+                break;
+            }
+        }
+
+        if (!placed) {
+            groups.push({ sum: size, cabinets: [cab] });
+        }
+    }
+    
+    return groups;
+  }
 
   async function fetchComPenData() {
     if (!authToken || comPenDataFetched) return;
     
     try {
-      // Fetch total properties per community
-      const totalRes = await fetch("https://default573dc697995245d592c551116e7191.e4.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/21dee0139b034a3ba1357ccb51a45f89/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=v4kCLFroNzRHpMHB_Mq8xtRDpDozu5DPC8YdxoBQJRk", {
+      // Start cabinet grouping fetch immediately
+      fetch("https://default573dc697995245d592c551116e7191.e4.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/98b869a3cbf94be3971fc5fb9115ca6d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=lIPlXaKsTeru_0oKNYdoNQABqA_bKTUDb_P0Cg8GQ80", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ auth: authToken, type: "total" })
-      });
-      const totalData = await totalRes.json();
+        body: JSON.stringify({ auth: authToken })
+      })
+      .then(res => res.json())
+      .then(data => {
+          let records = [];
+          if (Array.isArray(data)) records = data;
+          else if (data && Array.isArray(data.records)) records = data.records;
+          else if (typeof data === 'object' && data !== null) records = Object.values(data);
+          
+          if (records.length > 0) {
+             cabinetGroups = groupCabinets(records);
+             console.log("Grouped Cabinets:", cabinetGroups);
+             const btn = document.getElementById('btn-show-all-opps');
+             if(btn) btn.disabled = false;
+          }
+      })
+      .catch(err => console.error("Error fetching cabinet data:", err));
 
-      // Fetch live services (pen) per community
-      const penRes = await fetch("https://default573dc697995245d592c551116e7191.e4.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/21dee0139b034a3ba1357ccb51a45f89/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=v4kCLFroNzRHpMHB_Mq8xtRDpDozu5DPC8YdxoBQJRk", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ auth: authToken, type: "pen" })
-      });
-      const penData = await penRes.json();
+      // Fetch total properties and live services in parallel
+      const [totalData, penData] = await Promise.all([
+          fetch("https://default573dc697995245d592c551116e7191.e4.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/21dee0139b034a3ba1357ccb51a45f89/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=v4kCLFroNzRHpMHB_Mq8xtRDpDozu5DPC8YdxoBQJRk", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ auth: authToken, type: "total" })
+          }).then(res => res.json()),
+          
+          fetch("https://default573dc697995245d592c551116e7191.e4.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/21dee0139b034a3ba1357ccb51a45f89/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=v4kCLFroNzRHpMHB_Mq8xtRDpDozu5DPC8YdxoBQJRk", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ auth: authToken, type: "pen" })
+          }).then(res => res.json())
+      ]);
 
       if (totalData && totalData.records && penData && penData.records) {
         const totals = {};
@@ -972,45 +1033,131 @@
   }
 
   function checkOpportunities(communityName) {
+      // Check cache first
+      if (opportunitiesCache.has(communityName)) {
+          console.log(`Using cached opportunities for ${communityName}`);
+          const cached = opportunitiesCache.get(communityName);
+          if (cached && cached.length > 0) {
+              renderOpportunities(communityName, cached);
+          } else {
+              alert(`No opportunities found for ${communityName} (Cached).`);
+          }
+          return;
+      }
+
+      const formattedName = `'${communityName}'`;
+      fetchOpportunitiesBatch(formattedName, [communityName]);
+  }
+
+  async function fetchAllOpportunities() {
+      if (!cabinetGroups.length) return;
+      
+      const btn = document.getElementById('btn-show-all-opps');
+      if(btn) {
+          btn.disabled = true;
+          btn.textContent = "Loading...";
+      }
+
+      // Process all groups in parallel
+      const promises = cabinetGroups.map(async group => {
+          const names = group.cabinets.map(c => c.Name);
+          
+          // Identify which are already cached
+          const cachedNames = names.filter(n => opportunitiesCache.has(n));
+          const uncachedNames = names.filter(n => !opportunitiesCache.has(n));
+
+          // Render cached ones immediately
+          cachedNames.forEach(name => {
+             const records = opportunitiesCache.get(name);
+             if (records && records.length > 0) {
+                 renderOpportunities(name, records);
+             }
+          });
+
+          // Fetch uncached ones
+          if (uncachedNames.length > 0) {
+              const formattedNames = uncachedNames.map(n => `'${n}'`).join(',');
+              try {
+                  await fetchOpportunitiesBatch(formattedNames, uncachedNames);
+              } catch (e) {
+                  console.error("Error fetching batch:", e);
+              }
+          }
+      });
+
+      await Promise.all(promises);
+
+      if(btn) {
+          btn.disabled = false;
+          btn.textContent = "Show All Opportunities";
+      }
+  }
+
+  async function fetchOpportunitiesBatch(communityNamesString, originalNamesList) {
       const url = "https://default573dc697995245d592c551116e7191.e4.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/7f7b12f5c94b4f53bf3816adc6786bb8/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=9PeeRS3A-ZEFG4pRyixzN7Q1dYLBAcu4v4G8zeG1j8Y";
       
-      console.log(`Checking opportunities for ${communityName}...`);
+      console.log(`Checking opportunities for: ${communityNamesString}`);
       
-      fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-              auth: authToken,
-              community: communityName
-          })
-      })
-      .then(response => {
-          console.log('Opportunity response status:', response.status);
-          return response.json();
-      })
-      .then(data => {
-          console.log('Opportunity response body:', data);
+      try {
+          const response = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  auth: authToken,
+                  community: communityNamesString
+              })
+          });
+          
+          const data = await response.json();
           if (data && data.records && data.records.length > 0) {
               processOpportunities(data.records);
           } else {
-              alert(`No opportunities found for ${communityName}.`);
+              // If explicit single check, show alert
+              if (originalNamesList && originalNamesList.length === 1) {
+                  alert(`No opportunities found for ${originalNamesList[0]}.`);
+              }
           }
-      })
-      .catch(err => {
+          
+          // Mark these as checked in cache even if empty, to avoid re-checking?
+          // For now, let's only cache positive results or we can cache empty arrays.
+          if (originalNamesList) {
+              originalNamesList.forEach(name => {
+                  if (!opportunitiesCache.has(name)) {
+                      opportunitiesCache.set(name, []); // Mark as visited/empty
+                  }
+              });
+          }
+
+      } catch (err) {
           console.error('Opportunity error:', err);
-          alert('Error checking opportunities. See console for details.');
-      });
+          if (originalNamesList && originalNamesList.length === 1) {
+              alert('Error checking opportunities. See console for details.');
+          }
+      }
   }
 
   function processOpportunities(records) {
-      const cabinetName = records[0].Account_Cabinet_Name__c || 'Unknown';
-      
+      // Group records by Cabinet Name
+      const byCabinet = {};
+      records.forEach(r => {
+          const cab = r.Account_Cabinet_Name__c || 'Unknown';
+          if (!byCabinet[cab]) byCabinet[cab] = [];
+          byCabinet[cab].push(r);
+      });
+
+      for (const [cabName, cabRecords] of Object.entries(byCabinet)) {
+          // Update cache
+          opportunitiesCache.set(cabName, cabRecords);
+          renderOpportunities(cabName, cabRecords);
+      }
+  }
+
+  function renderOpportunities(cabinetName, records) {
       // Check if already added to avoid duplicates
       const existingFeatures = opportunitiesSource.getFeatures();
       const alreadyExists = existingFeatures.some(f => f.get('cabinetName') === cabinetName);
       
       if (alreadyExists) {
-          console.log(`Opportunities for ${cabinetName} already shown.`);
           return;
       }
 
@@ -1036,10 +1183,13 @@
           opportunitiesSource.addFeatures(features);
           addOpportunityToSidebar(cabinetName, features.length);
           
-          // Zoom to extent of new features
-          const extent = ol.extent.createEmpty();
-          features.forEach(f => ol.extent.extend(extent, f.getGeometry().getExtent()));
-          map.getView().fit(extent, { padding: [50, 50, 50, 50], maxZoom: 18, duration: 1000 });
+          // Only zoom if it's a single addition (not bulk) or we can just skip auto-zoom for bulk
+          // For now, let's skip zoom if we are doing bulk (how do we know?)
+          // We can just zoom to the extent of ALL opportunities if needed, but that might be annoying.
+          // Let's keep the zoom for now, it might be jumpy but confirms action.
+          // Actually, if "Show All" runs, it calls this many times.
+          // Maybe we should disable zoom inside this function and handle it elsewhere?
+          // Or just leave it.
       }
   }
 
@@ -1198,19 +1348,8 @@
         const props = isCluster ? clustered[0].getProperties() : feature.getProperties();
         
         if (!props.caseNumber) {
-          // Not a case feature/cluster. Check if it is a community.
-          const commName = props.name || props.Name;
-          if (commName) {
-             const status = props.cabinet_status;
-             // If status is NOT 'Maintenance', show status popup. Otherwise show opportunity popup.
-             if (status && status !== 'Maintenance') {
-                 showStatusPopup(evt.coordinate, commName, status);
-             } else {
-                 showOpportunityPopup(evt.coordinate, commName);
-             }
-          }
-          // Ignore click entirely if not case (and handled community above)
-          return;
+          // Not a case feature/cluster. Let it fall through to generic handling below.
+          // This allows community clicks to be handled even when cases are enabled.
         }
       }
 
@@ -1350,8 +1489,58 @@
             </div>
           </div>`;
       } else {
-        // For non-case features (communities/trenches) keep the generic table
-        html = buildPopupContent(props);
+        // For non-case features (communities/trenches)
+        const commName = props.name || props.Name;
+        // Check if it looks like a community (has cabinet_status or friendly_name)
+        if (commName && (props.cabinet_status !== undefined || props.friendly_name !== undefined)) {
+            const friendlyName = props.friendly_name || '';
+            const cabinetStatus = props.cabinet_status || '';
+            const pen = (comPen && comPen[commName] !== undefined) ? comPen[commName] + '%' : 'N/A';
+
+            let oppsHtml = '';
+            // Check if we should show the opportunities check UI
+            // We show it if we haven't checked opportunities for this community yet.
+            if (!opportunitiesCache.has(commName)) {
+                 oppsHtml = `
+                 <div style="margin-top:10px; border-top:1px solid #eee; padding-top:8px; text-align:center;">
+                    <div style="font-weight:bold; margin-bottom:6px; font-size:11px;">Check opportunities?</div>
+                    <div style="display:flex; gap:10px; justify-content:center;">
+                        <button id="opp-yes-popup" style="padding:4px 10px; background:#2563eb; color:white; border:none; border-radius:4px; cursor:pointer; font-size:11px;">Yes</button>
+                        <button id="opp-no-popup" style="padding:4px 10px; background:#ccc; border:none; border-radius:4px; cursor:pointer; font-size:11px;">No</button>
+                    </div>
+                 </div>`;
+            }
+
+            html = `
+            <div class="popup-container">
+              <button class="popup-close">×</button>
+              <div class="popup-content">
+                <table class="popup-table">
+                  <tbody>
+                    <tr>
+                      <td class="popup-key">Name</td>
+                      <td class="popup-val-cell"><span class="popup-val">${escapeHtml(commName)}</span></td>
+                    </tr>
+                    <tr>
+                      <td class="popup-key">Friendly Name</td>
+                      <td class="popup-val-cell"><span class="popup-val">${escapeHtml(friendlyName)}</span></td>
+                    </tr>
+                    <tr>
+                      <td class="popup-key">Cabinet Status</td>
+                      <td class="popup-val-cell"><span class="popup-val">${escapeHtml(cabinetStatus)}</span></td>
+                    </tr>
+                    <tr>
+                      <td class="popup-key">Penetration%</td>
+                      <td class="popup-val-cell"><span class="popup-val">${escapeHtml(pen)}</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+                ${oppsHtml}
+              </div>
+            </div>`;
+        } else {
+            html = buildPopupContent(props);
+        }
       }
 
       // Reset offset for standard popups
@@ -1380,6 +1569,22 @@
         closeBtn.addEventListener('click', () => {
           document.getElementById('popup').style.display = 'none';
         });
+      }
+      
+      // Add event listeners for opportunity buttons if they exist
+      const yesBtn = document.getElementById('opp-yes-popup');
+      if (yesBtn) {
+          yesBtn.addEventListener('click', () => {
+              document.getElementById('popup').style.display = 'none';
+              const commName = props.name || props.Name;
+              if (commName) checkOpportunities(commName);
+          });
+      }
+      const noBtn = document.getElementById('opp-no-popup');
+      if (noBtn) {
+          noBtn.addEventListener('click', () => {
+              document.getElementById('popup').style.display = 'none';
+          });
       }
     } else {
       document.getElementById('popup').style.display = 'none';
@@ -1844,6 +2049,11 @@
     const searchInput = document.getElementById('caseSearch');
     const themeBtn = document.getElementById('themeToggle');
     const themeMenu = document.getElementById('themeMenu');
+    const btnShowAllOpps = document.getElementById('btn-show-all-opps');
+
+    if (btnShowAllOpps) {
+        btnShowAllOpps.addEventListener('click', fetchAllOpportunities);
+    }
 
     // Render Theme Menu
     function renderThemeMenu() {
@@ -2155,6 +2365,36 @@
         errBox.style.display = 'block';
       }
     }
+  }
+
+  // Community Search Logic
+  const commSearchInput = document.getElementById('communitySearch');
+  if (commSearchInput) {
+    commSearchInput.addEventListener('input', (e) => {
+      const term = e.target.value.trim().toLowerCase();
+      if (!term) return;
+      
+      const features = communityLookupSource.getFeatures();
+      // Find matches
+      const matches = features.filter(f => {
+          const name = f.get('name') || f.get('Name');
+          return name && name.toLowerCase().includes(term);
+      });
+      
+      if (matches.length > 0) {
+          // Zoom to fit ALL matching communities
+          const extent = ol.extent.createEmpty();
+          matches.forEach(f => ol.extent.extend(extent, f.getGeometry().getExtent()));
+          
+          if (!ol.extent.isEmpty(extent)) {
+              map.getView().fit(extent, {
+                  padding: [50, 50, 50, 50],
+                  duration: 500,
+                  maxZoom: 14 // Don't zoom in too close
+              });
+          }
+      }
+    });
   }
 
   // Penetration Filter Logic
